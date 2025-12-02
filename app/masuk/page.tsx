@@ -6,10 +6,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/utils/supabaseClient";
 import Navbar from "../components/Navbar";
+import Footer from "../components/Footer";
 
-const imgLogo1 = "https://www.figma.com/api/mcp/asset/853067a6-fee0-437e-84d5-18b281102ec0";
-const imgSimpleLineIconsEye = "https://www.figma.com/api/mcp/asset/41c50270-7e46-4013-8c2d-002f283e7fc9";
-const imgVector2 = "https://www.figma.com/api/mcp/asset/044ae3c8-2b69-4ea0-a2fc-094b22f6f72d";
+const siramifyLogo = "https://ik.imagekit.io/et2ltjxzhq/Siramify/siramify_logo.png";
+
 
 export default function MasukPage() {
   const router = useRouter();
@@ -46,7 +46,7 @@ export default function MasukPage() {
 
       if (error) {
         console.error("Login error:", error);
-        
+
         // Handle error dengan pesan yang lebih spesifik
         if (error.message.includes('Invalid login credentials') || error.message.includes('email')) {
           // Cek apakah email terdaftar (tidak bisa pakai admin API dari client, jadi pakai pesan umum)
@@ -82,11 +82,11 @@ export default function MasukPage() {
       console.log("🔍 Checking user in users table, ID:", data.user.id);
       console.log("🔍 User email:", data.user.email);
       console.log("🔍 User metadata:", data.user.user_metadata);
-      
+
       // Ambil role user dari database dengan retry
       let userData: { role: string; status: string } | null = null;
       let userError: any = null;
-      
+
       // Coba query dengan retry (3x)
       for (let attempt = 1; attempt <= 3; attempt++) {
         const { data: fetchedUserData, error: fetchError } = await supabase
@@ -98,13 +98,13 @@ export default function MasukPage() {
         if (fetchError) {
           console.log(`⚠️ Attempt ${attempt} failed:`, fetchError.message);
           userError = fetchError;
-          
+
           // Jika error karena user tidak ada (PGRST116), coba buat user
           if (fetchError.code === 'PGRST116' || fetchError.message.includes('No rows')) {
             console.log("User not found in users table, will create...");
             break; // Keluar dari loop, akan create user di bawah
           }
-          
+
           // Jika error lain (RLS, dll), tunggu sebentar dan coba lagi
           if (attempt < 3) {
             await new Promise(resolve => setTimeout(resolve, 500));
@@ -123,7 +123,7 @@ export default function MasukPage() {
         console.log("⚠️ User not found in users table, creating automatically...");
         const role = data.user.user_metadata?.role || "pembeli";
         const fullName = data.user.user_metadata?.full_name || data.user.email?.split('@')[0] || "User";
-        
+
         const insertData = {
           id: data.user.id,
           email: data.user.email || "",
@@ -131,9 +131,9 @@ export default function MasukPage() {
           role: role,
           status: "active"
         };
-        
+
         console.log("Attempting to insert user data:", insertData);
-        
+
         // Coba upsert (lebih aman daripada insert)
         const { error: upsertError } = await supabase
           .from("users")
@@ -150,16 +150,16 @@ export default function MasukPage() {
           return;
         } else {
           console.log("✅ User profile created via upsert");
-          
+
           // Tunggu sebentar lalu verify
           await new Promise(resolve => setTimeout(resolve, 500));
-          
+
           const { data: newUserData } = await supabase
             .from("users")
             .select("role, status")
             .eq("id", data.user.id)
             .single();
-          
+
           if (newUserData) {
             console.log("✅ User verified in users table:", newUserData);
             userData = newUserData;
@@ -176,22 +176,22 @@ export default function MasukPage() {
         // Coba query langsung dengan service role atau cek di auth.users metadata
         console.warn("⚠️ Could not fetch user data (possibly RLS issue)");
         console.warn("⚠️ Error details:", userError);
-        
+
         // Coba ambil role dari metadata atau email
         let fallbackRole = data.user.user_metadata?.role;
-        
+
         // Jika email admin, pastikan role admin
         if (data.user.email?.toLowerCase().includes('admin') || data.user.email === 'admin@siramify.com') {
           console.log("🔧 Detected admin email, forcing admin role");
           fallbackRole = "admin";
         }
-        
+
         // Jika masih tidak ada, default ke pembeli
         if (!fallbackRole) {
           console.warn("⚠️ No role in metadata, defaulting to pembeli");
           fallbackRole = "pembeli";
         }
-        
+
         console.log("⚠️ Using fallback role:", fallbackRole);
         redirectBasedOnRole(fallbackRole);
         return;
@@ -203,14 +203,14 @@ export default function MasukPage() {
         // Jika status null/kosong, anggap aktif
         const status = (userData.status || 'active').toLowerCase().trim();
         const isActive = status === 'active' || status === 'aktif' || !status;
-        
+
         if (!isActive) {
           console.log("❌ User status:", userData.status, "-> considered inactive");
           setErrorMessage("Akun Anda tidak aktif. Silakan hubungi administrator.");
           setIsLoading(false);
           return;
         }
-        
+
         console.log("✅ User status OK, redirecting to:", userData.role);
         redirectBasedOnRole(userData.role);
       } else {
@@ -230,7 +230,7 @@ export default function MasukPage() {
     // Normalize role to lowercase untuk case-insensitive check
     const normalizedRole = (role || "").toLowerCase().trim();
     console.log("Redirecting based on role:", role, "-> normalized:", normalizedRole);
-    
+
     if (normalizedRole === "petani") {
       console.log("✅ Redirecting to /petani/beranda");
       router.push("/petani/beranda");
@@ -249,24 +249,33 @@ export default function MasukPage() {
   return (
     <div className="bg-white min-h-screen flex flex-col">
       <Navbar />
-      
+
       <div className="flex-1 flex items-center justify-center px-6 md:px-20 pt-24 md:pt-32 pb-16 md:pb-20">
         <div className="w-full max-w-[1440px] mx-auto flex flex-col md:flex-row items-center justify-center gap-12 md:gap-16">
           {/* Logo Section */}
-          <div className="hidden md:flex items-center justify-center w-full md:w-auto md:flex-1 max-w-[500px]">
-            <div className="relative w-[300px] md:w-[403px] h-[80px] md:h-[104px]">
+          {/* Logo Section */}
+          <div className="hidden md:flex flex-col items-center justify-center w-full md:w-auto md:flex-1 max-w-[600px] text-center gap-6">
+            <div className="relative w-[300px] md:w-[400px] h-[300px] md:h-[400px]">
               <Image
-                src={imgLogo1}
-                alt="Siramify Logo"
+                src="https://ik.imagekit.io/et2ltjxzhq/Siramify/character_siramify.webp"
+                alt="Siramify Character"
                 fill
                 className="object-contain"
                 unoptimized
               />
             </div>
+            <div className="flex flex-col gap-2">
+              <h1 className="font-bold text-xl md:text-2xl text-[#561530]">
+                Semua Lebih Mudah di Siramify
+              </h1>
+              <p className="text-xs md:text-sm text-[#561530]/80">
+                Gabung dan rasakan kemudahan mengelola tanaman dengan siramify
+              </p>
+            </div>
           </div>
 
           {/* Login Form Card */}
-          <div className="w-full md:w-[340px] bg-[#eed2e1] border-2 border-[#9e1c60] rounded-[8px] p-4 shadow-lg">
+          <div className="w-full md:w-[340px] bg-[#eed2e1]/80 backdrop-blur-sm border-2 border-[#9e1c60] rounded-[8px] p-4 shadow-lg">
             <h2 className="font-bold text-base md:text-lg text-[#561530] mb-3 md:mb-4">
               Masuk
             </h2>
@@ -311,16 +320,20 @@ export default function MasukPage() {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 flex items-center justify-center cursor-pointer hover:opacity-70 transition"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#561530] hover:bg-gray-200 active:bg-gray-300 rounded-full p-1 transition cursor-pointer"
                   >
-                    <Image
-                      src={imgSimpleLineIconsEye}
-                      alt={showPassword ? "Hide password" : "Show password"}
-                      width={14}
-                      height={14}
-                      className="object-contain"
-                      unoptimized
-                    />
+                    {showPassword ? (
+                      // Icon Eye (Show Password)
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    ) : (
+                      // Icon Eye Slash (Hide Password)
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
+                      </svg>
+                    )}
                   </button>
                 </div>
                 {/* Lupa Password Link */}
@@ -335,7 +348,7 @@ export default function MasukPage() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="bg-[#9e1c60] hover:bg-[#811844] transition text-white font-bold text-xs py-2 md:py-2.5 px-4 md:px-5 rounded-[10px] mt-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-[#9e1c60] hover:bg-[#811844] transition text-white font-bold text-xs py-2 md:py-2.5 px-4 md:px-5 rounded-[10px] mt-1 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 {isLoading ? "Masuk..." : "Masuk"}
               </button>
@@ -353,50 +366,7 @@ export default function MasukPage() {
       </div>
 
       {/* Footer */}
-      <footer className="bg-[#561530] w-full py-6 md:py-8 mt-auto">
-        <div className="flex flex-col gap-3 md:gap-4 items-center px-6 md:px-8 lg:px-10 w-full max-w-[900px] mx-auto">
-          <div className="flex flex-col md:flex-row gap-4 md:gap-6 items-center">
-            <div className="h-[30px] relative w-[117px]">
-              <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                <Image
-                  src={imgLogo1} 
-                  alt="Siramify Logo" 
-                  width={117} 
-                  height={30}
-                  className="absolute h-[221.94%] left-[-1.71%] max-w-none top-[-64.52%] w-[101.76%]"
-                  unoptimized
-                />
-              </div>
-            </div>
-            <div className="h-[26px] relative w-0 hidden md:block">
-              <div className="absolute inset-[-1.92%_-0.5px]">
-                <Image src={imgVector2} alt="" width={1} height={26} className="block max-w-none size-full" unoptimized />
-              </div>
-            </div>
-            <div className="flex gap-[15px] items-center">
-              <a href="https://www.linkedin.com/in/niefa-ev/" target="_blank" rel="noopener noreferrer" className="size-6 hover:opacity-70 transition flex items-center justify-center">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M19 0H5C2.239 0 0 2.239 0 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5V5c0-2.761-2.238-5-5-5zM8 19H5V8h3v11zM6.5 6.732c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zM20 19h-3v-5.604c0-3.368-4-3.113-4 0V19h-3V8h3v1.765c1.396-2.586 7-2.777 7 2.476V19z" fill="white"/>
-                </svg>
-              </a>
-              <a href="https://www.instagram.com/niefaefrilia/" target="_blank" rel="noopener noreferrer" className="size-6 hover:opacity-70 transition flex items-center justify-center">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" fill="white"/>
-                </svg>
-              </a>
-              <a href="https://wa.me/6281287840141" target="_blank" rel="noopener noreferrer" className="size-6 hover:opacity-70 transition flex items-center justify-center">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" fill="white"/>
-                </svg>
-              </a>
-            </div>
-          </div>
-          <p className="font-normal text-[10px] md:text-xs text-center text-white w-full">
-            Siramify adalah platform berbasis web yang dirancang untuk membantu petani mengelola penyiraman tanaman secara otomatis, efisien, dan berbasis data. Dengan memanfaatkan teknologi sensor suhu dan kelembapan yang terhubung ke sistem pemantauan real-time, Siramify memungkinkan pengguna mengetahui kondisi lingkungan tanaman secara akurat serta mengatur penyiraman sesuai kebutuhan.
-          </p>
-          <p className="font-normal text-[10px] md:text-xs text-center text-white w-full">© 2025 SIRAMIFY</p>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

@@ -1,14 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import ProfilModal from "./ProfilModal";
+import { supabase } from "@/utils/supabaseClient";
 
 const imgVector = "https://www.figma.com/api/mcp/asset/2d50e43c-8e6c-4cfe-8046-8ee95c01e548";
 const imgImage9 = "/profile.png";
 
 export default function PetaniHeader() {
   const [isProfilModalOpen, setIsProfilModalOpen] = useState(false);
+  const [profileImage, setProfileImage] = useState(imgImage9);
+
+  const fetchProfile = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from('users')
+          .select('photo_profile')
+          .eq('id', user.id)
+          .single();
+
+        if (profile?.photo_profile) {
+          setProfileImage(profile.photo_profile);
+        } else if (user.user_metadata?.avatar_url) {
+          setProfileImage(user.user_metadata.avatar_url);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching profile:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchProfile();
+  }, []);
 
   return (
     <div className="flex items-center justify-end gap-2">
@@ -31,14 +58,14 @@ export default function PetaniHeader() {
             style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}
           />
         </div>
-        
+
         {/* Profile Badge - Clickable */}
         <button
           onClick={() => setIsProfilModalOpen(true)}
           className="relative w-[20px] h-[20px] rounded-full overflow-hidden flex-shrink-0 border border-white cursor-pointer hover:opacity-80 transition-opacity"
         >
           <Image
-            src={imgImage9}
+            src={profileImage}
             alt="Profile Badge"
             fill
             className="object-cover object-center"
@@ -52,6 +79,7 @@ export default function PetaniHeader() {
       <ProfilModal
         isOpen={isProfilModalOpen}
         onClose={() => setIsProfilModalOpen(false)}
+        onUpdate={fetchProfile}
       />
     </div>
   );

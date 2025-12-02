@@ -1,21 +1,22 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import React from "react";
+import { supabase } from "@/utils/supabaseClient";
 
 const imgImage9 = "/profile.png";
-const imgMaterialSymbolsEditOutline = "https://www.figma.com/api/mcp/asset/28d01788-21aa-43f5-8042-94832c343afb";
 
 interface ProfilModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onUpdate?: () => void;
 }
 
-export default function ProfilModal({ isOpen, onClose }: ProfilModalProps) {
+export default function ProfilModal({ isOpen, onClose, onUpdate }: ProfilModalProps) {
   const [formData, setFormData] = useState({
-    namaLengkap: "Budi Budiman",
-    email: "budiman123@gmail.com",
+    namaLengkap: "",
+    email: "",
     password: "********",
     passwordBaru: "",
     konfirmasiPasswordBaru: ""
@@ -25,7 +26,42 @@ export default function ProfilModal({ isOpen, onClose }: ProfilModalProps) {
   const [showKonfirmasiPassword, setShowKonfirmasiPassword] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [profileImage, setProfileImage] = useState<string>(imgImage9);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchUserData();
+    }
+  }, [isOpen]);
+
+  const fetchUserData = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        // Fetch profile data from users table
+        const { data: profile } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+        setFormData(prev => ({
+          ...prev,
+          namaLengkap: profile?.full_name || user.user_metadata?.full_name || "",
+          email: user.email || "",
+        }));
+
+        if (profile?.photo_profile) {
+          setProfileImage(profile.photo_profile);
+        } else if (user.user_metadata?.avatar_url) {
+          setProfileImage(user.user_metadata.avatar_url);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching user data:", error);
+    }
+  };
 
   const handleImageClick = () => {
     fileInputRef.current?.click();
@@ -39,12 +75,14 @@ export default function ProfilModal({ isOpen, onClose }: ProfilModalProps) {
         alert('File harus berupa gambar');
         return;
       }
-      
+
       // Validasi ukuran file (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
         alert('Ukuran file maksimal 5MB');
         return;
       }
+
+      setSelectedFile(file);
 
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -61,22 +99,72 @@ export default function ProfilModal({ isOpen, onClose }: ProfilModalProps) {
     setIsSaving(true);
 
     try {
-      // TODO: Update profile in Supabase
-      // const { error } = await supabase
-      //   .from("users")
-      //   .update({
-      //     nama: formData.namaLengkap,
-      //     email: formData.email,
-      //     password: formData.passwordBaru
-      //   })
-      //   .eq("id", userId);
-      // if (error) throw error;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("No user found");
+
+      let photoUrl = profileImage;
+
+      // Upload image if selected
+      if (selectedFile) {
+        const fileExt = selectedFile.name.split('.').pop();
+        const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+        const filePath = `${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('avatars')
+          .upload(filePath, selectedFile);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('avatars')
+          .getPublicUrl(filePath);
+
+        photoUrl = publicUrl;
+      }
+
+      // Update users table
+      const { error: updateError } = await supabase
+        .from("users")
+        .update({
+          full_name: formData.namaLengkap,
+          photo_profile: photoUrl,
+        })
+        .eq("id", user.id);
+
+      if (updateError) throw updateError;
+
+      // Update auth password if provided
+      if (formData.passwordBaru) {
+        if (formData.passwordBaru !== formData.konfirmasiPasswordBaru) {
+          alert("Password baru dan konfirmasi tidak cocok");
+          setIsSaving(false);
+          return;
+        }
+
+        const { error: authError } = await supabase.auth.updateUser({
+          password: formData.passwordBaru
+        });
+
+        if (authError) throw authError;
+      }
+
+      // Update auth email if changed
+      if (formData.email !== user.email) {
+        const { error: emailError } = await supabase.auth.updateUser({
+          email: formData.email
+        });
+        if (emailError) throw emailError;
+      }
 
       alert("Profil berhasil diperbarui!");
       onClose();
+      // Refresh data
+      fetchUserData();
+      if (onUpdate) onUpdate();
     } catch (error: any) {
       console.error("Error updating profile:", error);
-      alert("Gagal memperbarui profil. Silakan coba lagi.");
+      alert(`Gagal memperbarui profil: ${error.message}`);
     } finally {
       setIsSaving(false);
     }
@@ -130,7 +218,7 @@ export default function ProfilModal({ isOpen, onClose }: ProfilModalProps) {
                 />
               </div>
               {/* Edit Icon - Outside the circle */}
-              <div 
+              <div
                 onClick={handleImageClick}
                 className="absolute bottom-0 right-0 w-[36px] h-[36px] bg-white rounded-full flex items-center justify-center cursor-pointer hover:bg-[#f0f0f0] transition-colors border-2 border-gray-300 shadow-lg z-10"
                 style={{ transform: 'translate(8px, 8px)' }}
@@ -151,14 +239,14 @@ export default function ProfilModal({ isOpen, onClose }: ProfilModalProps) {
                 </svg>
               </div>
             </div>
-            
+
             {/* Buttons */}
             <div className="flex flex-col gap-2.5 w-full">
               <button
                 type="button"
                 onClick={handleSubmit}
                 disabled={isSaving}
-                className="bg-[#27a73d] h-[35px] rounded-[5px] text-white font-bold hover:bg-[#1f8a31] active:bg-[#1a7a2a] transition-all duration-200 disabled:opacity-50 flex items-center justify-center text-center shadow-md w-full"
+                className="bg-[#27a73d] h-[35px] rounded-[5px] text-white font-bold hover:bg-[#1f8a31] active:bg-[#1a7a2a] transition-all duration-200 disabled:opacity-50 flex items-center justify-center text-center shadow-md w-full cursor-pointer"
                 style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '14px' }}
               >
                 {isSaving ? "Menyimpan..." : "Simpan"}
@@ -166,7 +254,7 @@ export default function ProfilModal({ isOpen, onClose }: ProfilModalProps) {
               <button
                 type="button"
                 onClick={onClose}
-                className="bg-[#e09028] h-[35px] rounded-[5px] text-white font-bold hover:bg-[#c77a1f] active:bg-[#b56a1a] transition-all duration-200 flex items-center justify-center text-center shadow-md w-full"
+                className="bg-[#e09028] h-[35px] rounded-[5px] text-white font-bold hover:bg-[#c77a1f] active:bg-[#b56a1a] transition-all duration-200 flex items-center justify-center text-center shadow-md w-full cursor-pointer"
                 style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '14px' }}
               >
                 Kembali

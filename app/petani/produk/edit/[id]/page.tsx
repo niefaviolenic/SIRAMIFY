@@ -35,7 +35,7 @@ export default function EditProdukPage() {
   const loadData = async () => {
     try {
       setIsLoading(true);
-      
+
       // Get current user
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) {
@@ -126,10 +126,13 @@ export default function EditProdukPage() {
 
       // Upload foto baru jika ada
       let fotoUrl = productImage; // Default: gunakan foto yang sudah ada
-      
+
       if (productImageFile) {
         try {
-          fotoUrl = await uploadImageToStorage(productImageFile, user.id);
+          const uploadedUrl = await uploadImageToStorage(productImageFile, user.id);
+          if (uploadedUrl) {
+            fotoUrl = uploadedUrl;
+          }
         } catch (error: any) {
           console.error("Error uploading image:", error);
           setErrorMessage("Gagal mengupload foto baru. Foto lama akan tetap digunakan.");
@@ -247,7 +250,7 @@ export default function EditProdukPage() {
                               setTimeout(() => setErrorMessage(""), 5000);
                               return;
                             }
-                            
+
                             // Clear error jika validasi berhasil
                             setErrorMessage("");
 

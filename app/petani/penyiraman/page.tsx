@@ -56,17 +56,17 @@ export default function PenyiramanPage() {
           hour = parseInt(timeMatch[1]);
         }
       }
-      
+
       console.log(`[ML Prediction] Request untuk record terbaru ${record.id}:`, {
         suhu: record.suhu,
         kelembapan: record.kelembapan,
         hour: hour
       });
-      
+
       const predictionResult = await predictStatus(record.suhu, record.kelembapan, hour);
-      
+
       console.log(`[ML Prediction] Response untuk record terbaru ${record.id}:`, predictionResult);
-      
+
       // Update latest prediction langsung ke state
       setLatestPrediction({
         prediksiSuhu: predictionResult.prediksi_suhu || null,
@@ -85,7 +85,7 @@ export default function PenyiramanPage() {
   const loadRecords = async () => {
     try {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
-      
+
       if (userError) {
         console.error("Error getting user:", userError);
         alert("Error: " + userError.message);
@@ -104,11 +104,11 @@ export default function PenyiramanPage() {
       const { count, error: countError } = await supabase
         .from("penyiraman")
         .select("*", { count: "exact", head: true });
-      
+
       console.log("=== COUNT QUERY ===");
       console.log("Count result (ALL DATA):", count);
       console.log("Count error:", countError);
-      
+
       if (countError) {
         console.error("Error counting records:", countError);
         setTotalRecords(0);
@@ -133,13 +133,13 @@ export default function PenyiramanPage() {
         .select("*")
         .order("id", { ascending: false })
         .range(from, to);
-      
+
       console.log("=== QUERY RESULT ===");
       console.log("Fetching ALL data (no user_id filter)");
       console.log("Data received:", data);
       console.log("Data length:", data?.length);
       console.log("Error:", error);
-      
+
       // Debug: Cek apakah ada RLS policy yang memblokir
       if (error) {
         console.error("Supabase error:", error);
@@ -149,18 +149,18 @@ export default function PenyiramanPage() {
           hint: error.hint,
           code: error.code
         });
-        
+
         // Jika error terkait RLS/permission
         if (error.code === 'PGRST301' || error.message?.includes('permission') || error.message?.includes('policy')) {
           console.error("⚠️ RLS Policy Issue: Tabel penyiraman mungkin memiliki Row Level Security yang memblokir akses.");
           console.error("💡 Solusi: Di Supabase, buka tabel penyiraman > Settings > Disable RLS atau buat policy yang mengizinkan SELECT untuk authenticated users");
         }
-        
+
         alert("Error loading data: " + error.message);
         setRecords([]);
         return;
       }
-      
+
       // Jika tidak ada error tapi data kosong, kemungkinan RLS memblokir
       if (!error && (!data || data.length === 0)) {
         console.warn("⚠️ Query berhasil tapi tidak ada data. Kemungkinan:");
@@ -177,15 +177,15 @@ export default function PenyiramanPage() {
         const mappedRecords = data.map((item: any, index: number) => {
           console.log("Processing item:", item);
           console.log("Item ID:", item.id, item.Id, item.ID);
-          
+
           // Format tanggal dari Tanggal/tanggal field
           // Handle case sensitivity (PostgreSQL bisa lowercase atau uppercase)
           const tanggalValue = item.Tanggal || item.tanggal || item.TANGGAL;
-          
+
           // Parse tanggal dan waktu dari format "DD/MM/YYYY HH:MM" atau "MM/DD/YYYY HH:MM"
           let tanggal = "";
           let waktu = "";
-          
+
           if (tanggalValue) {
             // Coba parse format "DD/MM/YYYY HH:MM" atau "MM/DD/YYYY HH:MM"
             const parts = tanggalValue.toString().trim().split(" ");
@@ -193,7 +193,7 @@ export default function PenyiramanPage() {
               // Ada tanggal dan waktu
               const datePart = parts[0]; // "06/02/2022"
               const timePart = parts[1]; // "01:25"
-              
+
               // Parse tanggal (format DD/MM/YYYY)
               const dateParts = datePart.split("/");
               if (dateParts.length === 3) {
@@ -202,7 +202,7 @@ export default function PenyiramanPage() {
                 const year = dateParts[2];
                 tanggal = `${day}/${month}/${year}`;
               }
-              
+
               // Parse waktu (format HH:MM)
               if (timePart) {
                 waktu = timePart.replace(":", ".");
@@ -224,7 +224,7 @@ export default function PenyiramanPage() {
               }
             }
           }
-          
+
           // Fallback: jika waktu masih kosong, cek kolom Waktu terpisah
           if (!waktu) {
             if (item.Waktu || item.waktu || item.WAKTU) {
@@ -235,7 +235,7 @@ export default function PenyiramanPage() {
               }
             }
           }
-          
+
           // Jika masih kosong, generate default
           if (!tanggal) {
             tanggal = new Date().toLocaleDateString("id-ID", {
@@ -244,7 +244,7 @@ export default function PenyiramanPage() {
               year: "numeric",
             });
           }
-          
+
           if (!waktu) {
             // Generate waktu secara manual berdasarkan index untuk variasi
             const baseHour = 6;
@@ -273,7 +273,7 @@ export default function PenyiramanPage() {
 
           // Handle case sensitivity untuk ID - Supabase biasanya menggunakan lowercase 'id'
           const recordId = item.id || item.Id || item.ID;
-          
+
           if (!recordId) {
             console.warn("Record tanpa ID ditemukan:", item);
           }
@@ -289,13 +289,13 @@ export default function PenyiramanPage() {
             prediksiSuhu: null,
             prediksiKelembapan: null,
           };
-          
+
           console.log("Mapped record:", record);
           return record;
         });
-        
+
         setRecords(mappedRecords);
-        
+
         // Load ML prediction hanya untuk record terbaru (untuk card)
         if (mappedRecords.length > 0) {
           loadMLPrediction(mappedRecords[0]);
@@ -342,7 +342,7 @@ export default function PenyiramanPage() {
       } else {
         loadRecords();
       }
-      
+
       setShowDeleteModal(false);
       setDeleteId(null);
     } catch (error) {
@@ -362,19 +362,19 @@ export default function PenyiramanPage() {
   const handleJumpToPage = () => {
     const pageNumber = parseInt(pageInput);
     const totalPages = Math.ceil(totalRecords / itemsPerPage);
-    
+
     if (isNaN(pageNumber) || pageNumber < 1) {
       alert("Masukkan nomor halaman yang valid (minimal 1)");
       setPageInput("");
       return;
     }
-    
+
     if (pageNumber > totalPages) {
       alert(`Halaman tidak valid. Maksimal halaman ${totalPages}`);
       setPageInput("");
       return;
     }
-    
+
     setCurrentPage(pageNumber);
     setPageInput("");
   };
@@ -413,17 +413,17 @@ export default function PenyiramanPage() {
       const csvData = data.map((item: any, index: number) => {
         // Format tanggal dan waktu dari kolom Tanggal
         const tanggalValue = item.Tanggal || item.tanggal || item.TANGGAL;
-        
+
         let tanggal = "";
         let waktu = "";
-        
+
         if (tanggalValue) {
           // Parse format "DD/MM/YYYY HH:MM"
           const parts = tanggalValue.toString().trim().split(" ");
           if (parts.length >= 2) {
             const datePart = parts[0];
             const timePart = parts[1];
-            
+
             const dateParts = datePart.split("/");
             if (dateParts.length === 3) {
               const day = dateParts[0];
@@ -431,7 +431,7 @@ export default function PenyiramanPage() {
               const year = dateParts[2];
               tanggal = `${day}/${month}/${year}`;
             }
-            
+
             if (timePart) {
               waktu = timePart.replace(":", ".");
             }
@@ -450,7 +450,7 @@ export default function PenyiramanPage() {
             }
           }
         }
-        
+
         // Fallback untuk waktu
         if (!waktu) {
           if (item.Waktu || item.waktu || item.WAKTU) {
@@ -466,7 +466,7 @@ export default function PenyiramanPage() {
             waktu = `${hour.toString().padStart(2, '0')}.${minute.toString().padStart(2, '0')}`;
           }
         }
-        
+
         if (!tanggal) {
           tanggal = new Date().toLocaleDateString("id-ID", {
             day: "numeric",
@@ -517,11 +517,11 @@ export default function PenyiramanPage() {
       ];
 
       const csvContent = csvRows.join("\n");
-      
+
       // Add BOM for UTF-8 to support Indonesian characters in Excel
       const BOM = "\uFEFF";
       const blob = new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8;" });
-      
+
       // Create download link
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -580,12 +580,11 @@ export default function PenyiramanPage() {
           <div className="mb-4">
             {/* Info Message */}
             {exportMessage.text && exportMessage.type && (
-              <div 
-                className={`mb-3 px-4 py-2 rounded-[10px] flex items-center gap-2 ${
-                  exportMessage.type === "success" 
-                    ? "bg-green-50 border border-green-200 text-green-800" 
+              <div
+                className={`mb-3 px-4 py-2 rounded-[10px] flex items-center gap-2 ${exportMessage.type === "success"
+                    ? "bg-green-50 border border-green-200 text-green-800"
                     : "bg-red-50 border border-red-200 text-red-800"
-                }`}
+                  }`}
                 style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '12px' }}
               >
                 {exportMessage.type === "success" ? (
@@ -600,7 +599,7 @@ export default function PenyiramanPage() {
                 <span>{exportMessage.text}</span>
               </div>
             )}
-            
+
             <button
               onClick={exportToCSV}
               className="px-4 py-2 bg-[#9e1c60] text-white rounded-[10px] hover:bg-[#7d1650] hover:shadow-md transition-all duration-200 flex items-center gap-2"
@@ -632,24 +631,24 @@ export default function PenyiramanPage() {
                 Prediksi Suhu
               </p>
               <p className="font-bold text-black" style={{ fontSize: '20px', fontFamily: 'Arial, Helvetica, sans-serif', color: '#9e1c60' }}>
-                {latestPrediction.prediksiSuhu !== null && latestPrediction.prediksiSuhu !== undefined 
-                  ? `${latestPrediction.prediksiSuhu.toFixed(2)}°` 
-                  : isLoading 
-                    ? "Loading..." 
+                {latestPrediction.prediksiSuhu !== null && latestPrediction.prediksiSuhu !== undefined
+                  ? `${latestPrediction.prediksiSuhu.toFixed(2)}°`
+                  : isLoading
+                    ? "Loading..."
                     : "N/A"}
               </p>
             </div>
-            
+
             {/* Prediksi Kelembapan Card */}
             <div className="border border-[#9e1c60] rounded-[10px] p-4 bg-white flex-1 min-w-[200px]">
               <p className="text-black mb-2" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
                 Prediksi Kelembapan
               </p>
               <p className="font-bold text-black" style={{ fontSize: '20px', fontFamily: 'Arial, Helvetica, sans-serif', color: '#9e1c60' }}>
-                {latestPrediction.prediksiKelembapan !== null && latestPrediction.prediksiKelembapan !== undefined 
-                  ? `${latestPrediction.prediksiKelembapan.toFixed(2)}%` 
-                  : isLoading 
-                    ? "Loading..." 
+                {latestPrediction.prediksiKelembapan !== null && latestPrediction.prediksiKelembapan !== undefined
+                  ? `${latestPrediction.prediksiKelembapan.toFixed(2)}%`
+                  : isLoading
+                    ? "Loading..."
                     : "N/A"}
               </p>
             </div>
@@ -659,106 +658,106 @@ export default function PenyiramanPage() {
           <div className="rounded-[15px] overflow-hidden shadow-lg" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)', fontFamily: 'Arial, Helvetica, sans-serif' }}>
             <div className="overflow-x-auto">
               <table className="w-full">
-              {/* Table Header */}
-              <thead>
-                <tr className="bg-[#eed2e1] h-[40px]">
-                  <th className="px-4 text-center font-bold text-[#181818] w-[62px]" style={{ fontSize: '14px' }}>
-                    No
-                  </th>
-                  <th className="px-4 text-center font-bold text-[#181818] min-w-[146px]" style={{ fontSize: '14px' }}>
-                    Tanggal
-                  </th>
-                  <th className="px-4 text-center font-bold text-[#181818] min-w-[146px]" style={{ fontSize: '14px' }}>
-                    Waktu
-                  </th>
-                  <th className="px-4 text-center font-bold text-[#181818] min-w-[146px]" style={{ fontSize: '14px' }}>
-                    Suhu
-                  </th>
-                  <th className="px-4 text-center font-bold text-[#181818] min-w-[146px]" style={{ fontSize: '14px' }}>
-                    Kelembapan
-                  </th>
-                  <th className="px-4 text-center font-bold text-[#181818] w-[100px]" style={{ fontSize: '14px' }}>
-                    Status
-                  </th>
-                  <th className="px-4 text-center font-bold text-[#181818] w-[100px]" style={{ fontSize: '14px' }}>
-                    Aksi
-                  </th>
-                </tr>
-              </thead>
+                {/* Table Header */}
+                <thead>
+                  <tr className="bg-[#eed2e1] h-[40px]">
+                    <th className="px-4 text-center font-bold text-[#181818] w-[62px]" style={{ fontSize: '14px' }}>
+                      No
+                    </th>
+                    <th className="px-4 text-center font-bold text-[#181818] min-w-[146px]" style={{ fontSize: '14px' }}>
+                      Tanggal
+                    </th>
+                    <th className="px-4 text-center font-bold text-[#181818] min-w-[146px]" style={{ fontSize: '14px' }}>
+                      Waktu
+                    </th>
+                    <th className="px-4 text-center font-bold text-[#181818] min-w-[146px]" style={{ fontSize: '14px' }}>
+                      Suhu
+                    </th>
+                    <th className="px-4 text-center font-bold text-[#181818] min-w-[146px]" style={{ fontSize: '14px' }}>
+                      Kelembapan
+                    </th>
+                    <th className="px-4 text-center font-bold text-[#181818] w-[100px]" style={{ fontSize: '14px' }}>
+                      Status
+                    </th>
+                    <th className="px-4 text-center font-bold text-[#181818] w-[100px]" style={{ fontSize: '14px' }}>
+                      Aksi
+                    </th>
+                  </tr>
+                </thead>
 
-              {/* Table Body */}
-              <tbody style={{ background: 'linear-gradient(to bottom, #ffffff 0%, #faf8fb 100%)' }}>
-                {isLoading ? (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500" style={{ fontSize: '12px' }}>
-                      Memuat data...
-                    </td>
-                  </tr>
-                ) : records.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500" style={{ fontSize: '12px' }}>
-                      Tidak ada data
-                    </td>
-                  </tr>
-                ) : (
-                  records.map((record, index) => (
-                    <tr
-                      key={record.id}
-                      className="h-[50px] border-b border-[#9e1c60]/15 last:border-b-0 transition"
-                      style={{ 
-                        background: 'linear-gradient(to bottom, #ffffff 0%, #faf8fb 100%)',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'linear-gradient(to bottom, #faf5f8 0%, #f5e8f0 100%)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'linear-gradient(to bottom, #ffffff 0%, #faf8fb 100%)';
-                      }}
-                    >
-                      <td className="px-4 text-center">
-                        <p className="text-[#181818]" style={{ fontSize: '12px' }}>{(currentPage - 1) * itemsPerPage + index + 1}</p>
-                      </td>
-                      <td className="px-4 text-center">
-                        <p className="text-[#181818]" style={{ fontSize: '12px' }}>{record.tanggal}</p>
-                      </td>
-                      <td className="px-4 text-center">
-                        <p className="text-[#181818]" style={{ fontSize: '12px' }}>{record.waktu}</p>
-                      </td>
-                      <td className="px-4 text-center">
-                        <p className="text-[#181818]" style={{ fontSize: '12px' }}>{record.suhu}°</p>
-                      </td>
-                      <td className="px-4 text-center">
-                        <p className="text-[#181818]" style={{ fontSize: '12px' }}>{record.kelembapan}%</p>
-                      </td>
-                      <td className="px-4 text-center">
-                        <div className="flex items-center justify-center">
-                          <div
-                            className="rounded-[10px] px-4 py-1 h-[24px] min-w-[72px] flex items-center justify-center"
-                            style={{ backgroundColor: getStatusColor(record.status) }}
-                          >
-                            <p className="font-bold text-white text-center" style={{ fontSize: '12px' }}>
-                              {record.status}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4">
-                        <div className="flex items-center justify-center">
-                          <button
-                            onClick={() => handleDeleteClick(record.id)}
-                            className="w-5 h-5 flex items-center justify-center hover:opacity-70 transition cursor-pointer"
-                            title="Hapus"
-                          >
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                              <path d="M6 19C6 20.1 6.9 21 8 21H16C17.1 21 18 20.1 18 19V7H6V19ZM19 4H15.5L14.5 3H9.5L8.5 4H5V6H19V4Z" fill="#dc2626"/>
-                            </svg>
-                          </button>
-                        </div>
+                {/* Table Body */}
+                <tbody style={{ background: 'linear-gradient(to bottom, #ffffff 0%, #faf8fb 100%)' }}>
+                  {isLoading ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-8 text-center text-gray-500" style={{ fontSize: '12px' }}>
+                        Memuat data...
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
+                  ) : records.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-8 text-center text-gray-500" style={{ fontSize: '12px' }}>
+                        Tidak ada data
+                      </td>
+                    </tr>
+                  ) : (
+                    records.map((record, index) => (
+                      <tr
+                        key={record.id}
+                        className="h-[50px] border-b border-[#9e1c60]/15 last:border-b-0 transition"
+                        style={{
+                          background: 'linear-gradient(to bottom, #ffffff 0%, #faf8fb 100%)',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = 'linear-gradient(to bottom, #faf5f8 0%, #f5e8f0 100%)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'linear-gradient(to bottom, #ffffff 0%, #faf8fb 100%)';
+                        }}
+                      >
+                        <td className="px-4 text-center">
+                          <p className="text-[#181818]" style={{ fontSize: '12px' }}>{(currentPage - 1) * itemsPerPage + index + 1}</p>
+                        </td>
+                        <td className="px-4 text-center">
+                          <p className="text-[#181818]" style={{ fontSize: '12px' }}>{record.tanggal}</p>
+                        </td>
+                        <td className="px-4 text-center">
+                          <p className="text-[#181818]" style={{ fontSize: '12px' }}>{record.waktu}</p>
+                        </td>
+                        <td className="px-4 text-center">
+                          <p className="text-[#181818]" style={{ fontSize: '12px' }}>{record.suhu}°</p>
+                        </td>
+                        <td className="px-4 text-center">
+                          <p className="text-[#181818]" style={{ fontSize: '12px' }}>{record.kelembapan}%</p>
+                        </td>
+                        <td className="px-4 text-center">
+                          <div className="flex items-center justify-center">
+                            <div
+                              className="rounded-[10px] px-4 py-1 h-[24px] min-w-[72px] flex items-center justify-center"
+                              style={{ backgroundColor: getStatusColor(record.status) }}
+                            >
+                              <p className="font-bold text-white text-center" style={{ fontSize: '12px' }}>
+                                {record.status}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4">
+                          <div className="flex items-center justify-center">
+                            <button
+                              onClick={() => handleDeleteClick(record.id)}
+                              className="w-5 h-5 flex items-center justify-center hover:opacity-70 transition cursor-pointer"
+                              title="Hapus"
+                            >
+                              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M6 19C6 20.1 6.9 21 8 21H16C17.1 21 18 20.1 18 19V7H6V19ZM19 4H15.5L14.5 3H9.5L8.5 4H5V6H19V4Z" fill="#dc2626" />
+                              </svg>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
               </table>
             </div>
           </div>
@@ -778,7 +777,7 @@ export default function PenyiramanPage() {
                     }}
                     disabled={currentPage === 1}
                     className={currentPage === 1 ? "px-3 py-1 rounded-[10px] cursor-not-allowed pointer-events-none" : "px-3 py-1 rounded-[10px] border-2 border-[#9e1c60] text-[#9e1c60] hover:bg-[#9e1c60] hover:text-white transition"}
-                    style={{ 
+                    style={{
                       fontSize: '12px',
                       borderWidth: '2px',
                       ...(currentPage === 1 ? {
@@ -790,11 +789,11 @@ export default function PenyiramanPage() {
                   >
                     Sebelumnya
                   </button>
-                  
+
                   <span className="text-[#181818] px-2" style={{ fontSize: '12px' }}>
                     Halaman {currentPage} dari {Math.ceil(totalRecords / itemsPerPage)}
                   </span>
-                  
+
                   <button
                     onClick={() => {
                       if (currentPage >= Math.ceil(totalRecords / itemsPerPage)) return;
@@ -802,7 +801,7 @@ export default function PenyiramanPage() {
                     }}
                     disabled={currentPage >= Math.ceil(totalRecords / itemsPerPage)}
                     className={currentPage >= Math.ceil(totalRecords / itemsPerPage) ? "px-3 py-1 rounded-[10px] cursor-not-allowed pointer-events-none" : "px-3 py-1 rounded-[10px] border-2 border-[#9e1c60] text-[#9e1c60] hover:bg-[#9e1c60] hover:text-white transition"}
-                    style={{ 
+                    style={{
                       fontSize: '12px',
                       borderWidth: '2px',
                       ...(currentPage >= Math.ceil(totalRecords / itemsPerPage) ? {
@@ -816,7 +815,7 @@ export default function PenyiramanPage() {
                   </button>
                 </div>
               </div>
-              
+
               {/* Jump to Page Input */}
               <div className="flex items-center gap-2 justify-end">
                 <span className="text-[#181818]" style={{ fontSize: '12px' }}>Lompat ke:</span>
@@ -850,20 +849,21 @@ export default function PenyiramanPage() {
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
-        <div 
+        <div
           className="fixed inset-0 flex items-center justify-center z-50 py-8"
           onClick={handleDeleteCancel}
-          style={{ 
+          style={{
             animation: 'fadeIn 0.2s ease-in-out',
             fontFamily: 'Arial, Helvetica, sans-serif',
             backgroundColor: 'rgba(255, 255, 255, 0.5)'
           }}
         >
-          <div 
+          <div
             className="rounded-[15px] p-8 max-w-sm w-full mx-4 relative shadow-2xl"
-            style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}
             onClick={(e) => e.stopPropagation()}
-            style={{ 
+            style={{
+              background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)',
+              border: '1px solid rgba(158, 28, 96, 0.25)',
               animation: 'slideUp 0.3s ease-out',
               fontFamily: 'Arial, Helvetica, sans-serif'
             }}
@@ -874,14 +874,14 @@ export default function PenyiramanPage() {
                 <span className="text-4xl text-[#9e1c60] font-bold leading-none">!</span>
               </div>
             </div>
-            
+
             {/* Message */}
             <div className="text-center mb-8">
               <p className="text-[#181818] text-lg font-normal leading-relaxed" style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}>
                 Anda yakin ingin menghapus riwayat tersebut?
               </p>
             </div>
-            
+
             {/* Buttons */}
             <div className="flex gap-3">
               <button
