@@ -4,6 +4,12 @@ export async function predictStatus(suhu, kelembapan, hour) {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
       
+      console.log("[ML API] Mengirim request ke http://127.0.0.1:8000/predict", {
+        suhu,
+        kelembapan,
+        hour
+      });
+      
       const response = await fetch("http://127.0.0.1:8000/predict", {
         method: "POST",
         headers: {
@@ -24,16 +30,30 @@ export async function predictStatus(suhu, kelembapan, hour) {
       }
   
       const data = await response.json();
-      return data.hasil;
+      
+      console.log("[ML API] Response dari API:", data);
+      
+      // Return object lengkap dengan status, prediksi_suhu, prediksi_kelembapan
+      return {
+        status: data.status || "Normal",
+        prediksi_suhu: data.prediksi_suhu || null,
+        prediksi_kelembapan: data.prediksi_kelembapan || null
+      };
     } catch (error) {
       if (error.name === 'AbortError') {
-        console.error("ML API timeout: API tidak merespons dalam 5 detik");
+        console.error("[ML API] Timeout: API tidak merespons dalam 5 detik");
       } else if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
-        console.error("ML API error: Tidak dapat terhubung ke API. Pastikan API berjalan di http://127.0.0.1:8000");
+        console.error("[ML API] Error: Tidak dapat terhubung ke API. Pastikan API berjalan di http://127.0.0.1:8000");
       } else {
-        console.error("ML API error:", error);
+        console.error("[ML API] Error:", error);
       }
-      return null;
+      
+      // Return default jika error
+      return {
+        status: "Normal",
+        prediksi_suhu: null,
+        prediksi_kelembapan: null
+      };
     }
   }
   
