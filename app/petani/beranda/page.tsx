@@ -8,7 +8,6 @@ import PetaniHeader from "@/app/components/PetaniHeader";
 import { supabase } from "@/utils/supabaseClient";
 import { predictStatus } from "@/utils/predict";
 
-const imgRectangle324 = "https://www.figma.com/api/mcp/asset/02bb6978-990e-4498-8e73-068e48a0a8fe";
 const imgOuiTemperature = "https://www.figma.com/api/mcp/asset/1ccfd9b8-ec7e-49de-9d9b-b2b0c98fc1b8";
 const imgMaterialSymbolsHumidityPercentageOutlineRounded = "https://www.figma.com/api/mcp/asset/b0ba560b-c570-4435-ba95-f69584225709";
 const imgIconoirSoilAlt = "https://www.figma.com/api/mcp/asset/df5d736e-1cdb-4a8c-acdd-c181032e3576";
@@ -26,23 +25,16 @@ export default function BerandaPage() {
   const [userName, setUserName] = useState<string>("Petani");
   const [isWateringOn, setIsWateringOn] = useState(false);
   const [currentData, setCurrentData] = useState({
-    suhu: 26.5,
-    kelembapan: 53,
-    status: "Kering" as "Kering" | "Normal" | "Basah",
+    suhu: 0,
+    kelembapan: 0,
+    status: "Normal" as "Kering" | "Normal" | "Basah",
   });
-  const [chartData, setChartData] = useState<MonitoringData[]>([]);
-  const [statistics, setStatistics] = useState({
-    totalHariIni: 5,
-    totalMingguIni: 32,
-    rataRataSuhu: 27.2,
-    rataRataKelembapan: 55.8,
-  });
-  const [productSummary, setProductSummary] = useState({
-    total: 3,
-    tersedia: 1,
-    habis: 1,
-  });
+  const [isLoading, setIsLoading] = useState(true);
   const [mlPrediction, setMlPrediction] = useState<string | null>(null);
+  const [mlPredictionData, setMlPredictionData] = useState<{
+    prediksi_suhu: number | null;
+    prediksi_kelembapan: number | null;
+  } | null>(null);
   const [isLoadingPrediction, setIsLoadingPrediction] = useState(false);
   const [mlError, setMlError] = useState<string | null>(null);
 
@@ -53,8 +45,7 @@ export default function BerandaPage() {
 
   useEffect(() => {
     // Panggil prediksi ML saat currentData berubah
-    // Hanya panggil jika suhu dan kelembapan valid (bukan 0 atau undefined)
-    if (currentData.suhu && currentData.kelembapan && currentData.suhu > 0 && currentData.kelembapan > 0) {
+    if (currentData.suhu > 0 && currentData.kelembapan > 0) {
       getMLPrediction();
     }
   }, [currentData.suhu, currentData.kelembapan]);
@@ -63,7 +54,6 @@ export default function BerandaPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        // Ambil nama dari metadata atau email
         const name = user.user_metadata?.full_name || 
                      user.user_metadata?.name || 
                      user.email?.split('@')[0] || 
@@ -77,35 +67,49 @@ export default function BerandaPage() {
 
   const loadMonitoringData = async () => {
     try {
-      // TODO: Fetch from Supabase
-      // Mock data untuk sekarang
-      const mockChartData: MonitoringData[] = [
-        { tanggal: "15 Jan", suhu: 26.5, kelembapan: 53, status: "Kering" },
-        { tanggal: "16 Jan", suhu: 27.0, kelembapan: 55, status: "Kering" },
-        { tanggal: "17 Jan", suhu: 27.5, kelembapan: 58, status: "Normal" },
-        { tanggal: "18 Jan", suhu: 28.0, kelembapan: 62, status: "Normal" },
-        { tanggal: "19 Jan", suhu: 27.8, kelembapan: 65, status: "Normal" },
-        { tanggal: "20 Jan", suhu: 27.2, kelembapan: 68, status: "Basah" },
-        { tanggal: "21 Jan", suhu: 26.8, kelembapan: 53, status: "Kering" },
-      ];
-      setChartData(mockChartData);
-      
-      // Set current data dari data terbaru
-      if (mockChartData.length > 0) {
-        const latest = mockChartData[mockChartData.length - 1];
+      setIsLoading(true);
+      // Ambil data terbaru dari tabel penyiraman
+      const { data, error } = await supabase
+        .from("penyiraman")
+        .select("*")
+        .order("id", { ascending: false })
+        .limit(1);
+
+      if (error) {
+        console.error("Error loading monitoring data:", error);
+        setIsLoading(false);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        const item = data[0];
+        const suhuValue = item.Suhu || item.suhu || item.SUHU || 0;
+        const kelembapanValue = item.Kelembapan || item.kelembapan || item.KELEMBAPAN || 0;
+        
+        // Tentukan status berdasarkan kelembapan
+        let status: "Kering" | "Normal" | "Basah" = "Normal";
+        if (kelembapanValue < 55) {
+          status = "Kering";
+        } else if (kelembapanValue >= 55 && kelembapanValue < 70) {
+          status = "Normal";
+        } else {
+          status = "Basah";
+        }
+
         setCurrentData({
-          suhu: latest.suhu,
-          kelembapan: latest.kelembapan,
-          status: latest.status,
+          suhu: suhuValue,
+          kelembapan: kelembapanValue,
+          status: status,
         });
       }
     } catch (error) {
       console.error("Error loading monitoring data:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const getMLPrediction = async () => {
-    // Jangan panggil jika sudah loading atau data tidak valid
     if (isLoadingPrediction || !currentData.suhu || !currentData.kelembapan) {
       return;
     }
@@ -113,22 +117,24 @@ export default function BerandaPage() {
     setIsLoadingPrediction(true);
     setMlError(null);
     try {
-      // Ambil jam saat ini (0-23)
       const currentHour = new Date().getHours();
       const prediction = await predictStatus(currentData.suhu, currentData.kelembapan, currentHour);
       
-      if (prediction) {
-        setMlPrediction(prediction);
+      if (prediction && prediction.status) {
+        setMlPrediction(prediction.status);
+        setMlPredictionData({
+          prediksi_suhu: prediction.prediksi_suhu,
+          prediksi_kelembapan: prediction.prediksi_kelembapan,
+        });
         setMlError(null);
-        // Update status berdasarkan prediksi ML
+        
         setCurrentData(prev => ({
           ...prev,
-          status: prediction as "Kering" | "Normal" | "Basah",
+          status: prediction.status as "Kering" | "Normal" | "Basah",
         }));
       } else {
-        // Jika prediksi gagal, tetap gunakan status dari kelembapan
-        console.warn("ML prediction failed, using fallback status");
         setMlPrediction(null);
+        setMlPredictionData(null);
         setMlError("API tidak tersedia");
       }
     } catch (error) {
@@ -136,7 +142,6 @@ export default function BerandaPage() {
       setMlPrediction(null);
       setMlError("Gagal memanggil API");
     } finally {
-      // Pastikan loading state selalu di-reset
       setIsLoadingPrediction(false);
     }
   };
@@ -160,215 +165,6 @@ export default function BerandaPage() {
     return "#3b82f6";
   };
 
-  // Mini Line Chart Component
-  const MiniLineChart = ({ data, color }: { data: number[], color: string }) => {
-    const width = 80;
-    const height = 30;
-    const max = Math.max(...data, 1);
-    const min = Math.min(...data, 0);
-    const range = max - min || 1;
-    
-    const points = data.map((value, index) => {
-      const x = (index / (data.length - 1 || 1)) * width;
-      const y = height - ((value - min) / range) * height;
-      return `${x},${y}`;
-    }).join(' ');
-
-    return (
-      <svg width={width} height={height} className="absolute bottom-2 left-2">
-        <polyline
-          points={points}
-          fill="none"
-          stroke={color}
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    );
-  };
-
-  // Circular Progress Ring
-  const CircularRing = ({ percentage, color, size = 50 }: { percentage: number, color: string, size?: number }) => {
-    const radius = (size - 8) / 2;
-    const circumference = 2 * Math.PI * radius;
-    const offset = circumference - (percentage / 100) * circumference;
-
-    return (
-      <svg width={size} height={size} className="transform -rotate-90">
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          stroke="#e5e7eb"
-          strokeWidth="4"
-          fill="none"
-        />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          stroke={color}
-          strokeWidth="4"
-          fill="none"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          strokeLinecap="round"
-          className="transition-all duration-500"
-        />
-        <text
-          x={size / 2}
-          y={size / 2 + 4}
-          textAnchor="middle"
-          className="text-xs font-bold fill-black"
-          style={{ fontSize: '12px' }}
-        >
-          {percentage}%
-        </text>
-      </svg>
-    );
-  };
-
-  // Main Line Chart Component
-  const MainLineChart = ({ data }: { data: MonitoringData[] }) => {
-    const width = 800;
-    const height = 200;
-    const padding = 40;
-    const chartWidth = width - padding * 2;
-    const chartHeight = height - padding * 2;
-
-    const suhuValues = data.map(d => d.suhu);
-    const kelembapanValues = data.map(d => d.kelembapan);
-    const suhuMax = Math.max(...suhuValues, 1);
-    const suhuMin = Math.min(...suhuValues, 0);
-    const kelembapanMax = Math.max(...kelembapanValues, 1);
-    const kelembapanMin = Math.min(...kelembapanValues, 0);
-
-    const suhuPoints = suhuValues.map((value, index) => {
-      const x = padding + (index / (data.length - 1 || 1)) * chartWidth;
-      const y = padding + chartHeight - ((value - suhuMin) / (suhuMax - suhuMin || 1)) * chartHeight;
-      return { x, y };
-    });
-
-    const kelembapanPoints = kelembapanValues.map((value, index) => {
-      const x = padding + (index / (data.length - 1 || 1)) * chartWidth;
-      const y = padding + chartHeight - ((value - kelembapanMin) / (kelembapanMax - kelembapanMin || 1)) * chartHeight;
-      return { x, y };
-    });
-
-    const suhuPath = suhuPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
-    const kelembapanPath = kelembapanPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
-
-    return (
-      <div className="rounded-[15px] p-4 shadow-lg" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}>
-        <h3 className="font-bold text-black mb-4" style={{ fontSize: '14px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
-          Grafik Suhu & Kelembapan (7 Hari Terakhir)
-        </h3>
-        <div className="flex items-center gap-4 mb-2">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-            <span className="text-black" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>Suhu</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-            <span className="text-black" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>Kelembapan</span>
-          </div>
-        </div>
-        <svg width={width} height={height} className="w-full">
-          {/* Grid lines */}
-          {[0, 1, 2, 3, 4].map(i => (
-            <line
-              key={i}
-              x1={padding}
-              y1={padding + (i * chartHeight / 4)}
-              x2={width - padding}
-              y2={padding + (i * chartHeight / 4)}
-              stroke="#e5e7eb"
-              strokeWidth="1"
-            />
-          ))}
-          {/* Suhu line */}
-          <path
-            d={suhuPath}
-            fill="none"
-            stroke="#ef4444"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          {/* Kelembapan line */}
-          <path
-            d={kelembapanPath}
-            fill="none"
-            stroke="#3b82f6"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          {/* X-axis labels */}
-          {data.map((d, i) => (
-            <text
-              key={i}
-              x={padding + (i / (data.length - 1 || 1)) * chartWidth}
-              y={height - 10}
-              textAnchor="middle"
-              className="text-xs fill-black"
-              style={{ fontSize: '10px', fontFamily: 'Arial, Helvetica, sans-serif' }}
-            >
-              {d.tanggal}
-            </text>
-          ))}
-        </svg>
-      </div>
-    );
-  };
-
-  // Bar Chart for Watering History
-  const WateringHistoryChart = () => {
-    const wateringData = [
-      { hari: "Sen", jumlah: 3, status: "Kering" },
-      { hari: "Sel", jumlah: 4, status: "Normal" },
-      { hari: "Rab", jumlah: 5, status: "Normal" },
-      { hari: "Kam", jumlah: 2, status: "Kering" },
-      { hari: "Jum", jumlah: 6, status: "Basah" },
-      { hari: "Sab", jumlah: 4, status: "Normal" },
-      { hari: "Min", jumlah: 5, status: "Normal" },
-    ];
-
-    const maxJumlah = Math.max(...wateringData.map(d => d.jumlah), 1);
-
-    return (
-      <div className="rounded-[15px] p-4 shadow-lg" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}>
-        <h3 className="font-bold text-black mb-4" style={{ fontSize: '14px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
-          Riwayat Penyiraman (Minggu Ini)
-        </h3>
-        <div className="flex items-end gap-2 h-[120px]">
-          {wateringData.map((item, index) => (
-            <div key={index} className="flex-1 flex flex-col items-center gap-2">
-              <div className="relative w-full flex items-end justify-center" style={{ height: '100px' }}>
-                <div
-                  className="w-full rounded-t-[5px] transition-all hover:opacity-80"
-                  style={{
-                    height: `${(item.jumlah / maxJumlah) * 100}%`,
-                    backgroundColor: getStatusColor(item.status),
-                    minHeight: '4px'
-                  }}
-                  title={`${item.jumlah} penyiraman`}
-                />
-              </div>
-              <span className="text-black text-center" style={{ fontSize: '8px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
-                {item.hari}
-              </span>
-              <span className="text-black text-center font-bold" style={{ fontSize: '10px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
-                {item.jumlah}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className="min-h-screen bg-[#fef7f5] flex">
       {/* Sidebar */}
@@ -390,7 +186,7 @@ export default function BerandaPage() {
             </div>
           </div>
 
-          {/* Welcome Banner */}
+          {/* Welcome Banner - JANGAN DIUBAH */}
           <div 
             className="mb-6 relative rounded-[15px] overflow-visible"
             style={{
@@ -413,7 +209,7 @@ export default function BerandaPage() {
               </div>
             </div>
             
-            {/* Farmer Image - Bottom inside border, top outside border */}
+            {/* Farmer Image */}
             <div className="absolute right-8 md:right-12 bottom-0 w-[180px] h-[180px] md:w-[190px] md:h-[190px] -mt-4 md:-mt-1 z-20 transform translate-y-2 md:translate-y-2">
               <Image
                 src="/petani.png"
@@ -426,179 +222,122 @@ export default function BerandaPage() {
           </div>
 
           {/* Monitoring Cards */}
-          <div className="grid grid-cols-3 gap-4 mb-4">
+          <div className="grid grid-cols-3 gap-4 mb-6">
             {/* Suhu Card */}
-            <div className="rounded-[15px] p-4 relative shadow-lg hover:shadow-xl transition-all duration-300" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}>
-              <div className="flex flex-col gap-1 mb-2">
-                <p className="text-black" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>Suhu</p>
-                <p className="font-bold text-black" style={{ fontSize: '24px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
-                  {currentData.suhu}°
-                </p>
-              </div>
-              <Image
-                src={imgOuiTemperature}
-                alt="Temperature"
-                width={40}
-                height={40}
-                className="absolute right-4 top-4 object-contain opacity-60"
-                unoptimized
-              />
-              <div className="relative h-[30px] mt-2">
-                <MiniLineChart 
-                  data={chartData.map(d => d.suhu)} 
-                  color="#ef4444"
+            <div className="rounded-[15px] p-5 relative shadow-lg hover:shadow-xl transition-all duration-300" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}>
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex-1">
+                  <p className="text-gray-600 mb-1" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>Suhu</p>
+                  {isLoading ? (
+                    <p className="text-gray-400" style={{ fontSize: '14px', fontFamily: 'Arial, Helvetica, sans-serif' }}>Memuat...</p>
+                  ) : (
+                    <p className="font-bold text-black" style={{ fontSize: '28px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                      {currentData.suhu.toFixed(1)}°
+                    </p>
+                  )}
+                </div>
+                <Image
+                  src={imgOuiTemperature}
+                  alt="Temperature"
+                  width={48}
+                  height={48}
+                  className="object-contain opacity-70"
+                  unoptimized
                 />
               </div>
             </div>
 
             {/* Kelembapan Card */}
-            <div className="rounded-[15px] p-4 relative shadow-lg hover:shadow-xl transition-all duration-300" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}>
-              <div className="flex flex-col gap-1 mb-2">
-                <p className="text-black" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>Kelembapan</p>
-                <p className="font-bold text-black" style={{ fontSize: '24px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
-                  {currentData.kelembapan}%
-                </p>
-              </div>
-              <Image
-                src={imgMaterialSymbolsHumidityPercentageOutlineRounded}
-                alt="Humidity"
-                width={40}
-                height={40}
-                className="absolute right-4 top-4 object-contain opacity-60"
-                unoptimized
-              />
-              <div className="relative h-[30px] mt-2">
-                <MiniLineChart 
-                  data={chartData.map(d => d.kelembapan)} 
-                  color="#3b82f6"
+            <div className="rounded-[15px] p-5 relative shadow-lg hover:shadow-xl transition-all duration-300" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}>
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex-1">
+                  <p className="text-gray-600 mb-1" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>Kelembapan</p>
+                  {isLoading ? (
+                    <p className="text-gray-400" style={{ fontSize: '14px', fontFamily: 'Arial, Helvetica, sans-serif' }}>Memuat...</p>
+                  ) : (
+                    <p className="font-bold text-black" style={{ fontSize: '28px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                      {currentData.kelembapan.toFixed(1)}%
+                    </p>
+                  )}
+                </div>
+                <Image
+                  src={imgMaterialSymbolsHumidityPercentageOutlineRounded}
+                  alt="Humidity"
+                  width={48}
+                  height={48}
+                  className="object-contain opacity-70"
+                  unoptimized
                 />
               </div>
             </div>
 
-            {/* Status Tanah Card dengan ML Prediction */}
-            <div className="rounded-[15px] p-4 relative shadow-lg hover:shadow-xl transition-all duration-300" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}>
-              <div className="flex flex-col gap-1 mb-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-black" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>Status Tanah</p>
-                  {mlPrediction && !isLoadingPrediction && (
-                    <span className="text-[#9e1c60] text-[8px] font-bold" style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}>
-                      ML
-                    </span>
+            {/* Status Tanah Card - Diperbaiki */}
+            <div className="rounded-[15px] p-5 relative shadow-lg hover:shadow-xl transition-all duration-300" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}>
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <p className="text-gray-600" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>Status Tanah</p>
+                    {mlPrediction && !isLoadingPrediction && (
+                      <span className="px-2 py-0.5 rounded-full bg-[#9e1c60] text-white text-[8px] font-bold" style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                        ML
+                      </span>
+                    )}
+                  </div>
+                  {isLoadingPrediction ? (
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-[#9e1c60] rounded-full animate-pulse"></div>
+                      <p className="text-gray-500" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>Memproses...</p>
+                    </div>
+                  ) : mlError ? (
+                    <div className="space-y-1">
+                      <p className="font-bold" style={{ fontSize: '20px', fontFamily: 'Arial, Helvetica, sans-serif', color: getStatusColor(currentData.status) }}>
+                        {currentData.status}
+                      </p>
+                      <p className="text-red-500 text-[10px]" style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                        {mlError}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="font-bold" style={{ fontSize: '28px', fontFamily: 'Arial, Helvetica, sans-serif', color: getStatusColor(mlPrediction || currentData.status) }}>
+                      {mlPrediction || currentData.status}
+                    </p>
                   )}
                 </div>
-                {isLoadingPrediction ? (
-                  <div className="flex items-center gap-1">
-                    <div className="w-2 h-2 bg-[#9e1c60] rounded-full animate-pulse"></div>
-                    <p className="text-black" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>Memproses...</p>
-                  </div>
-                ) : mlError ? (
-                  <div className="flex flex-col gap-1">
-                    <p className="font-bold text-black" style={{ fontSize: '16px', fontFamily: 'Arial, Helvetica, sans-serif', color: getStatusColor(currentData.status) }}>
-                      {currentData.status}
-                    </p>
-                    <p className="text-[#dc2626] text-[10px]" style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}>
-                      {mlError}
-                    </p>
-                  </div>
-                ) : (
-                  <p className="font-bold text-black" style={{ fontSize: '16px', fontFamily: 'Arial, Helvetica, sans-serif', color: getStatusColor(mlPrediction || currentData.status) }}>
-                    {mlPrediction || currentData.status}
-                  </p>
-                )}
-              </div>
-              <Image
-                src={imgIconoirSoilAlt}
-                alt="Soil"
-                width={40}
-                height={40}
-                className="absolute right-4 top-4 object-contain opacity-60"
-                unoptimized
-              />
-              <div className="flex items-center justify-center mt-2">
-                <CircularRing 
-                  percentage={currentData.kelembapan} 
-                  color={getKelembapanColor(currentData.kelembapan)}
-                  size={60}
+                <Image
+                  src={imgIconoirSoilAlt}
+                  alt="Soil"
+                  width={48}
+                  height={48}
+                  className="object-contain opacity-70"
+                  unoptimized
                 />
               </div>
               {!isLoadingPrediction && (
                 <button
                   onClick={getMLPrediction}
-                  className="mt-2 w-full bg-[#9e1c60] text-white rounded-[5px] py-1 px-2 hover:bg-[#7d1650] transition-colors text-[10px]"
+                  className="mt-3 w-full bg-[#9e1c60] text-white rounded-[8px] py-2 px-3 hover:bg-[#7d1650] transition-colors text-[11px] font-semibold"
                   style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}
                 >
-                  Refresh Prediksi
+                  Refresh Prediksi ML
                 </button>
               )}
             </div>
           </div>
 
-          {/* Main Chart */}
-          <div className="mb-4">
-            <MainLineChart data={chartData} />
-            <div className="mt-2 flex justify-end">
-              <button
-                onClick={() => router.push("/petani/penyiraman")}
-                className="text-[#9e1c60] hover:underline"
-                style={{ fontSize: '10px', fontFamily: 'Arial, Helvetica, sans-serif' }}
-              >
-                Lihat Detail Penyiraman &gt;
-              </button>
-            </div>
-          </div>
-
-          {/* Statistics Cards & Watering Status */}
-          <div className="grid grid-cols-4 gap-4 mb-4">
-            {/* Statistik Cards */}
-            <div className="rounded-[15px] p-4 shadow-lg hover:shadow-xl transition-all duration-300" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}>
-              <p className="text-black mb-2" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
-                Penyiraman Hari Ini
-              </p>
-              <p className="font-bold text-black" style={{ fontSize: '24px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
-                {statistics.totalHariIni}x
-              </p>
-            </div>
-            <div className="rounded-[15px] p-4 shadow-lg hover:shadow-xl transition-all duration-300" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}>
-              <p className="text-black mb-2" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
-                Penyiraman Minggu Ini
-              </p>
-              <p className="font-bold text-black" style={{ fontSize: '24px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
-                {statistics.totalMingguIni}x
-              </p>
-            </div>
-            <div className="rounded-[15px] p-4 shadow-lg hover:shadow-xl transition-all duration-300" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}>
-              <p className="text-black mb-2" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
-                Rata-rata Suhu
-              </p>
-              <p className="font-bold text-black" style={{ fontSize: '24px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
-                {statistics.rataRataSuhu}°
-              </p>
-            </div>
-            <div className="rounded-[15px] p-4 shadow-lg hover:shadow-xl transition-all duration-300" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}>
-              <p className="text-black mb-2" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
-                Rata-rata Kelembapan
-              </p>
-              <p className="font-bold text-black" style={{ fontSize: '24px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
-                {statistics.rataRataKelembapan}%
-              </p>
-            </div>
-          </div>
-
-          {/* Watering Status & History Chart */}
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            {/* Status Penyiraman */}
-            <div className="rounded-[15px] p-4 shadow-lg" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}>
-              <h3 className="font-bold text-black mb-4" style={{ fontSize: '14px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
-                Status Penyiraman
-              </h3>
-              <div className="flex items-center gap-4">
-                <div className="flex flex-col gap-3">
+          {/* Status Penyiraman Card - Diperbaiki */}
+          <div className="rounded-[15px] p-6 shadow-lg mb-6" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}>
+            <h3 className="font-bold text-black mb-5" style={{ fontSize: '16px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+              Kontrol Penyiraman
+            </h3>
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <div className="flex items-center gap-4 mb-4">
                   <button
                     onClick={() => setIsWateringOn(false)}
-                    className={`px-6 py-2 rounded-[5px] transition ${
+                    className={`px-8 py-3 rounded-[10px] transition-all font-semibold ${
                       !isWateringOn
-                        ? "bg-[#9e1c60] text-white"
-                        : "bg-transparent text-[#9e1c60] border-2 border-[#9e1c60]"
+                        ? "bg-[#9e1c60] text-white shadow-md"
+                        : "bg-white text-[#9e1c60] border-2 border-[#9e1c60] hover:bg-[#faf5f8]"
                     }`}
                     style={{ fontSize: '14px', fontFamily: 'Arial, Helvetica, sans-serif' }}
                   >
@@ -606,92 +345,77 @@ export default function BerandaPage() {
                   </button>
                   <button
                     onClick={() => setIsWateringOn(true)}
-                    className={`px-6 py-2 rounded-[5px] transition ${
+                    className={`px-8 py-3 rounded-[10px] transition-all font-semibold ${
                       isWateringOn
-                        ? "bg-[#9e1c60] text-white"
-                        : "bg-transparent text-[#9e1c60] border-2 border-[#9e1c60]"
+                        ? "bg-[#9e1c60] text-white shadow-md"
+                        : "bg-white text-[#9e1c60] border-2 border-[#9e1c60] hover:bg-[#faf5f8]"
                     }`}
                     style={{ fontSize: '14px', fontFamily: 'Arial, Helvetica, sans-serif' }}
                   >
                     Nyalakan
                   </button>
-                  <div className="mt-2">
-                    <p className="text-black" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
-                      Status: <span className="font-bold">{isWateringOn ? "Aktif" : "Nonaktif"}</span>
-                    </p>
-                    {isWateringOn && (
-                      <p className="text-black mt-1" style={{ fontSize: '8px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
-                        Penyiraman berikutnya: 2 jam lagi
-                      </p>
-                    )}
-                  </div>
                 </div>
-                <div className="flex-1 flex justify-center items-center">
-                  <div className={`transition-transform ${isWateringOn ? 'animate-pulse' : ''}`}>
-                    <Image
-                      src={imgMingcutePowerFill}
-                      alt="Power"
-                      width={100}
-                      height={100}
-                      className="object-contain"
-                      style={{ filter: isWateringOn ? 'none' : 'grayscale(100%) opacity(50%)' }}
-                      unoptimized
-                    />
-                  </div>
+                <div className="space-y-1">
+                  <p className="text-black font-semibold" style={{ fontSize: '14px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                    Status: <span className="font-bold" style={{ color: isWateringOn ? '#106113' : '#dc2626' }}>
+                      {isWateringOn ? "Aktif" : "Nonaktif"}
+                    </span>
+                  </p>
+                  {isWateringOn && (
+                    <p className="text-gray-600" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                      Penyiraman berikutnya: 2 jam lagi
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center justify-center ml-8">
+                <div className={`transition-all ${isWateringOn ? 'animate-pulse' : 'opacity-50'}`}>
+                  <Image
+                    src={imgMingcutePowerFill}
+                    alt="Power"
+                    width={120}
+                    height={120}
+                    className="object-contain"
+                    style={{ filter: isWateringOn ? 'none' : 'grayscale(100%)' }}
+                    unoptimized
+                  />
                 </div>
               </div>
             </div>
-
-            {/* Watering History Chart */}
-            <WateringHistoryChart />
           </div>
 
-          {/* Product Summary & Plant Image */}
-          <div className="grid grid-cols-3 gap-4">
-            {/* Product Summary Card */}
-            <div className="rounded-[15px] p-4 shadow-lg" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}>
-              <h3 className="font-bold text-black mb-4" style={{ fontSize: '14px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
-                Ringkasan Produk
-              </h3>
-              <div className="space-y-2 mb-4">
-                <div className="flex justify-between">
-                  <span className="text-black" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>Total Produk</span>
-                  <span className="font-bold text-black" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
-                    {productSummary.total}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-black" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>Tersedia</span>
-                  <span className="font-bold text-black" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif', color: '#106113' }}>
-                    {productSummary.tersedia}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-black" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>Habis</span>
-                  <span className="font-bold text-black" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif', color: '#dc2626' }}>
-                    {productSummary.habis}
-                  </span>
-                </div>
+          {/* Product Summary */}
+          <div className="rounded-[15px] p-5 shadow-lg" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}>
+            <h3 className="font-bold text-black mb-4" style={{ fontSize: '16px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+              Ringkasan Produk
+            </h3>
+            <div className="space-y-3 mb-5">
+              <div className="flex justify-between items-center py-2 border-b border-gray-200">
+                <span className="text-gray-600" style={{ fontSize: '13px', fontFamily: 'Arial, Helvetica, sans-serif' }}>Total Produk</span>
+                <span className="font-bold text-black" style={{ fontSize: '16px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                  3
+                </span>
               </div>
-              <button
-                onClick={() => router.push("/petani/produk")}
-                className="w-full bg-[#9e1c60] text-white rounded-[5px] py-2 hover:bg-[#7d1650] transition-colors"
-                style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}
-              >
-                Lihat Semua Produk
-              </button>
+              <div className="flex justify-between items-center py-2 border-b border-gray-200">
+                <span className="text-gray-600" style={{ fontSize: '13px', fontFamily: 'Arial, Helvetica, sans-serif' }}>Tersedia</span>
+                <span className="font-bold" style={{ fontSize: '16px', fontFamily: 'Arial, Helvetica, sans-serif', color: '#106113' }}>
+                  1
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-2">
+                <span className="text-gray-600" style={{ fontSize: '13px', fontFamily: 'Arial, Helvetica, sans-serif' }}>Habis</span>
+                <span className="font-bold" style={{ fontSize: '16px', fontFamily: 'Arial, Helvetica, sans-serif', color: '#dc2626' }}>
+                  1
+                </span>
+              </div>
             </div>
-
-            {/* Plant Image */}
-            <div className="col-span-2 rounded-[10px] overflow-hidden relative h-[200px]">
-              <Image
-                src={imgRectangle324}
-                alt="Plant"
-                fill
-                className="object-cover"
-                unoptimized
-              />
-            </div>
+            <button
+              onClick={() => router.push("/petani/produk")}
+              className="w-full bg-[#9e1c60] text-white rounded-[8px] py-2.5 hover:bg-[#7d1650] transition-colors font-semibold"
+              style={{ fontSize: '13px', fontFamily: 'Arial, Helvetica, sans-serif' }}
+            >
+              Lihat Semua Produk
+            </button>
           </div>
         </div>
       </div>
