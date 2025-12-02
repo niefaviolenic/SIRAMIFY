@@ -4,7 +4,11 @@ import Image from "next/image";
 import Link from "next/link";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
-import { useState } from "react";
+import FadeIn from "./components/FadeIn";
+import Skeleton from "./components/Skeleton";
+import { useState, useEffect } from "react";
+import { supabase } from "../utils/supabaseClient";
+import Toast from "./components/Toast";
 
 // Asset URLs
 const imgReadLeaf = "https://ik.imagekit.io/et2ltjxzhq/Siramify/selada_merah_hero.webp?updatedAt=1764650943013";
@@ -12,10 +16,62 @@ const siramifyLogo = "https://ik.imagekit.io/et2ltjxzhq/Siramify/siramify_logo.p
 const imgImage3 = "https://ik.imagekit.io/et2ltjxzhq/Siramify/selada_merah_tentang_kami.webp?updatedAt=1764650942939";
 const imgSiramTentangKami = "https://ik.imagekit.io/et2ltjxzhq/Siramify/siram_tentang_kami.webp?updatedAt=1764650943034";
 
+interface Product {
+  id: string;
+  nama: string;
+  harga: number;
+  stok: number;
+  foto: string | null;
+  jumlah_terjual: number;
+}
+
+interface Article {
+  id: string;
+  title: string;
+  image_url: string | null;
+  created_at: string;
+}
+
 export default function LandingPage() {
   const [isTopicOpen, setIsTopicOpen] = useState(false);
   const [selectedTopic, setSelectedTopic] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [articles, setArticles] = useState<Article[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [productsResponse, articlesResponse] = await Promise.all([
+          supabase
+            .from('produk')
+            .select('*')
+            .limit(3)
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('articles')
+            .select('*')
+            .limit(2)
+            .order('created_at', { ascending: false })
+        ]);
+
+        if (productsResponse.data) {
+          setProducts(productsResponse.data);
+        }
+        if (articlesResponse.data) {
+          setArticles(articlesResponse.data);
+        }
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -40,24 +96,40 @@ export default function LandingPage() {
       });
 
       if (response.ok) {
-        alert('Pesan berhasil dikirim!');
+        setToast({ message: 'Pesan berhasil dikirim!', type: 'success' });
         (e.target as HTMLFormElement).reset();
         setSelectedTopic("");
       } else {
         const errorData = await response.json();
-        alert(`Gagal mengirim pesan: ${errorData.error || 'Terjadi kesalahan'}`);
+        setToast({ message: `Gagal mengirim pesan: ${errorData.error || 'Terjadi kesalahan'}`, type: 'error' });
       }
     } catch (error) {
-      alert('Terjadi kesalahan saat mengirim pesan.');
+      setToast({ message: 'Terjadi kesalahan saat mengirim pesan.', type: 'error' });
       console.error(error);
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('id-ID', {
+      style: 'decimal',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
   return (
     <div className="bg-white relative w-full min-h-screen overflow-x-hidden">
       <Navbar />
+
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
 
       {/* Hero Section */}
       <div className="relative h-screen w-full pt-20">
@@ -137,41 +209,26 @@ export default function LandingPage() {
           {/* Content Container */}
           <div className="relative z-10 flex flex-col gap-12 md:gap-14 lg:gap-16 items-start px-6 md:px-8 lg:px-10 w-full max-w-[900px] mx-auto">
             {/* Tahukah kamu Section */}
-            <div className="flex flex-col md:flex-row items-center justify-between gap-6 w-full">
-              <div className="flex flex-col gap-2.5 md:gap-3 items-start text-xs md:text-sm text-[#561530] w-full md:w-[48%]">
-                <p className="font-bold italic w-full">Tahukah kamu…</p>
-                <div className="font-normal w-full">
-                  <p className="mb-3">
-                    Selada oakleaf merah (Lactuca sativa var. crispa) dikenal sebagai salah satu varietas hortikultura bernilai tinggi. Daunnya yang berwarna merah keunguan dan teksturnya yang renyah hanya dapat tercipta bila tanaman ini tumbuh dalam kondisi yang benar-benar stabil.
-                  </p>
-                  <p className="mb-3">
-                    Untuk mencapai kualitas terbaik, selada ini membutuhkan pengelolaan suhu dan kelembapan yang konsisten—lingkungan yang terukur, terpantau, dan tepat waktu. Bahkan sedikit perubahan pada suhu atau waktu penyiraman bisa memengaruhi warna, tekstur, dan kesegarannya.
-                  </p>
-                  <p>Karena itu, menjaga stabilitas lingkungan bukan hanya penting…</p>
+            <FadeIn>
+              <div className="flex flex-col md:flex-row items-center justify-between gap-6 w-full">
+                <div className="flex flex-col gap-2.5 md:gap-3 items-start text-xs md:text-sm text-[#561530] w-full md:w-[48%]">
+                  <p className="font-bold italic w-full">Tahukah kamu…</p>
+                  <div className="font-normal w-full">
+                    <p className="mb-3">
+                      Selada oakleaf merah (Lactuca sativa var. crispa) dikenal sebagai salah satu varietas hortikultura bernilai tinggi. Daunnya yang berwarna merah keunguan dan teksturnya yang renyah hanya dapat tercipta bila tanaman ini tumbuh dalam kondisi yang benar-benar stabil.
+                    </p>
+                    <p className="mb-3">
+                      Untuk mencapai kualitas terbaik, selada ini membutuhkan pengelolaan suhu dan kelembapan yang konsisten—lingkungan yang terukur, terpantau, dan tepat waktu. Bahkan sedikit perubahan pada suhu atau waktu penyiraman bisa memengaruhi warna, tekstur, dan kesegarannya.
+                    </p>
+                    <p>Karena itu, menjaga stabilitas lingkungan bukan hanya penting…</p>
+                  </div>
+                  <p className="font-bold italic w-full">…itu adalah kunci dari kualitas premium.</p>
                 </div>
-                <p className="font-bold italic w-full">…itu adalah kunci dari kualitas premium.</p>
-              </div>
-              <div className="h-[200px] md:h-[280px] lg:h-[360px] relative rounded-bl-[40px] md:rounded-bl-[60px] rounded-br-[16px] rounded-tl-[40px] md:rounded-tl-[60px] rounded-tr-[16px] w-full md:w-[48%] shrink-0">
-                <div className="absolute inset-0 overflow-hidden rounded-bl-[100px] md:rounded-bl-[228px] rounded-br-[28px] rounded-tl-[100px] md:rounded-tl-[228px] rounded-tr-[28px]">
-                  <Image
-                    src={imgImage3}
-                    alt="Selada merah"
-                    fill
-                    className="object-cover rounded-bl-[100px] md:rounded-bl-[228px] rounded-br-[28px] rounded-tl-[100px] md:rounded-tl-[228px] rounded-tr-[28px]"
-                    unoptimized
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Di sinilah Siramify Section */}
-            <div className="flex flex-col md:flex-row gap-6 items-center w-full">
-              <div className="flex items-center justify-center relative shrink-0 order-2 md:order-1 w-full md:w-[48%]">
-                <div className="flex-none rotate-[180deg] scale-y-[-100%] w-full">
-                  <div className="h-[200px] md:h-[280px] lg:h-[360px] relative rounded-bl-[40px] md:rounded-bl-[60px] rounded-br-[16px] rounded-tl-[40px] md:rounded-tl-[60px] rounded-tr-[16px] w-full shrink-0">
+                <div className="h-[200px] md:h-[280px] lg:h-[360px] relative rounded-bl-[40px] md:rounded-bl-[60px] rounded-br-[16px] rounded-tl-[40px] md:rounded-tl-[60px] rounded-tr-[16px] w-full md:w-[48%] shrink-0">
+                  <div className="absolute inset-0 overflow-hidden rounded-bl-[100px] md:rounded-bl-[228px] rounded-br-[28px] rounded-tl-[100px] md:rounded-tl-[228px] rounded-tr-[28px]">
                     <Image
-                      src={imgSiramTentangKami}
-                      alt="Tanaman"
+                      src={imgImage3}
+                      alt="Selada merah"
                       fill
                       className="object-cover rounded-bl-[100px] md:rounded-bl-[228px] rounded-br-[28px] rounded-tl-[100px] md:rounded-tl-[228px] rounded-tr-[28px]"
                       unoptimized
@@ -179,60 +236,83 @@ export default function LandingPage() {
                   </div>
                 </div>
               </div>
-              <div className="flex flex-col gap-2.5 md:gap-3 items-start text-xs md:text-sm text-[#561530] w-full md:w-[48%] order-1 md:order-2">
-                <p className="font-bold italic leading-normal w-full">Di sinilah Siramify hadir sebagai solusinya.</p>
-                <div className="font-normal w-full">
-                  <p className="leading-normal mb-2.5">
-                    Platform berbasis web yang memudahkan petani menjaga suhu, kelembapan, dan penyiraman tetap stabil secara otomatis dan berbasis data.
-                  </p>
-                  <p className="leading-normal mb-2.5">Siramify memungkinkan petani:</p>
-                  <ul className="list-disc ms-5">
-                    <li className="mb-1">Mendukung pertanian cerdas.</li>
-                    <li className="mb-1">Pemantauan real-time tanpa jeda.</li>
-                    <li className="mb-1">Otomatis dan efisien dalam penyiraman.</li>
-                    <li>Ramah pengguna dan mudah dipahami.</li>
-                  </ul>
+            </FadeIn>
+
+            {/* Di sinilah Siramify Section */}
+            <FadeIn delay={200}>
+              <div className="flex flex-col md:flex-row gap-6 items-center w-full">
+                <div className="flex items-center justify-center relative shrink-0 order-2 md:order-1 w-full md:w-[48%]">
+                  <div className="flex-none rotate-[180deg] scale-y-[-100%] w-full">
+                    <div className="h-[200px] md:h-[280px] lg:h-[360px] relative rounded-bl-[40px] md:rounded-bl-[60px] rounded-br-[16px] rounded-tl-[40px] md:rounded-tl-[60px] rounded-tr-[16px] w-full shrink-0">
+                      <Image
+                        src={imgSiramTentangKami}
+                        alt="Tanaman"
+                        fill
+                        className="object-cover rounded-bl-[100px] md:rounded-bl-[228px] rounded-br-[28px] rounded-tl-[100px] md:rounded-tl-[228px] rounded-tr-[28px]"
+                        unoptimized
+                      />
+                    </div>
+                  </div>
                 </div>
-                <p className="font-bold italic leading-normal w-full">
-                  Siramify memastikan setiap tanaman tumbuh di kondisi paling ideal setiap hari, tanpa repot.
-                </p>
+                <div className="flex flex-col gap-2.5 md:gap-3 items-start text-xs md:text-sm text-[#561530] w-full md:w-[48%] order-1 md:order-2">
+                  <p className="font-bold italic leading-normal w-full">Di sinilah Siramify hadir sebagai solusinya.</p>
+                  <div className="font-normal w-full">
+                    <p className="leading-normal mb-2.5">
+                      Platform berbasis web yang memudahkan petani menjaga suhu, kelembapan, dan penyiraman tetap stabil secara otomatis dan berbasis data.
+                    </p>
+                    <p className="leading-normal mb-2.5">Siramify memungkinkan petani:</p>
+                    <ul className="list-disc ms-5">
+                      <li className="mb-1">Mendukung pertanian cerdas.</li>
+                      <li className="mb-1">Pemantauan real-time tanpa jeda.</li>
+                      <li className="mb-1">Otomatis dan efisien dalam penyiraman.</li>
+                      <li>Ramah pengguna dan mudah dipahami.</li>
+                    </ul>
+                  </div>
+                  <p className="font-bold italic leading-normal w-full">
+                    Siramify memastikan setiap tanaman tumbuh di kondisi paling ideal setiap hari, tanpa repot.
+                  </p>
+                </div>
               </div>
-            </div>
+            </FadeIn>
 
             {/* Visi Misi Section */}
             <div className="flex flex-col gap-5 md:gap-6 items-start w-full mt-5">
               {/* Visi */}
-              <div className="flex flex-col md:flex-row gap-5 md:gap-20 items-center w-full">
-                <div className="box-border flex gap-2 items-center justify-center p-2 w-full md:w-[48%] order-2 md:order-1">
-                  <p className="font-normal text-xs md:text-sm text-[#561530] w-full">
-                    Menjadi platform digital terdepan yang mendorong terciptanya sistem penyiraman otomatis untuk pertanian berkelanjutan dan efisien di seluruh Indonesia.
-                  </p>
-                </div>
-                <div className="relative size-[100px] md:size-[120px] lg:size-[150px] shrink-0 order-1 md:order-2 md:ml-16">
-                  <div className="size-full rounded-full bg-[#9e1c60]" />
-                  <p className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-bold text-sm md:text-lg lg:text-xl text-center text-white">
-                    Visi Kami
-                  </p>
-                </div>
-              </div>
-
-              {/* Misi */}
-              <div className="flex flex-col md:flex-row gap-5 md:gap-40 items-center justify-end w-full">
-                <div className="relative size-[100px] md:size-[120px] lg:size-[150px] shrink-0 order-1 md:order-1 md:ml-25">
-                  <div className="size-full rounded-full bg-[#9e1c60]" />
-                  <p className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-bold text-sm md:text-lg lg:text-xl text-center text-white">
-                    Misi Kami
-                  </p>
-                </div>
-                <div className="box-border flex gap-2 items-center justify-center p-2 w-full md:w-[48%] order-2 md:order-2">
-                  <div className="font-normal text-xs md:text-sm text-[#561530] w-full">
-                    <p className="mb-2.5">
-                      Kami berkomitmen menghadirkan pertanian modern melalui inovasi digital yang mudah digunakan, mudah diakses, dan hemat air.
+              <FadeIn delay={400} className="w-full">
+                <div className="flex flex-col md:flex-row gap-5 md:gap-20 items-center w-full">
+                  <div className="box-border flex gap-2 items-center justify-center p-2 w-full md:w-[48%] order-2 md:order-1">
+                    <p className="font-normal text-xs md:text-sm text-[#561530] w-full">
+                      Menjadi platform digital terdepan yang mendorong terciptanya sistem penyiraman otomatis untuk pertanian berkelanjutan dan efisien di seluruh Indonesia.
                     </p>
-                    <p>Siramify hadir untuk menjembatani kebutuhan petani dengan teknologi yang benar-benar membantu di lapangan.</p>
+                  </div>
+                  <div className="relative size-[100px] md:size-[120px] lg:size-[150px] shrink-0 order-1 md:order-2 md:ml-16">
+                    <div className="size-full rounded-full bg-[#9e1c60]" />
+                    <p className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-bold text-sm md:text-lg lg:text-xl text-center text-white">
+                      Visi Kami
+                    </p>
                   </div>
                 </div>
-              </div>
+              </FadeIn>
+
+              {/* Misi */}
+              <FadeIn delay={600} className="w-full">
+                <div className="flex flex-col md:flex-row gap-5 md:gap-40 items-center justify-end w-full">
+                  <div className="relative size-[100px] md:size-[120px] lg:size-[150px] shrink-0 order-1 md:order-1 md:ml-25">
+                    <div className="size-full rounded-full bg-[#9e1c60]" />
+                    <p className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-bold text-sm md:text-lg lg:text-xl text-center text-white">
+                      Misi Kami
+                    </p>
+                  </div>
+                  <div className="box-border flex gap-2 items-center justify-center p-2 w-full md:w-[48%] order-2 md:order-2">
+                    <div className="font-normal text-xs md:text-sm text-[#561530] w-full">
+                      <p className="mb-2.5">
+                        Kami berkomitmen menghadirkan pertanian modern melalui inovasi digital yang mudah digunakan, mudah diakses, dan hemat air.
+                      </p>
+                      <p>Siramify hadir untuk menjembatani kebutuhan petani dengan teknologi yang benar-benar membantu di lapangan.</p>
+                    </div>
+                  </div>
+                </div>
+              </FadeIn>
             </div>
           </div>
         </section>
@@ -250,7 +330,7 @@ export default function LandingPage() {
             />
           </div>
 
-          <div className="relative z-10 flex flex-col gap-5 md:gap-6 items-center w-full px-6 md:px-8 lg:px-10 max-w-[900px] mx-auto">
+          <FadeIn className="relative z-10 flex flex-col gap-5 md:gap-6 items-center w-full px-6 md:px-8 lg:px-10 max-w-[900px] mx-auto">
             <div className="flex flex-col gap-2.5 md:gap-3 items-start text-center w-full">
               <h2 className="font-bold text-[#9e1c60] text-lg md:text-xl lg:text-2xl w-full">Artikel</h2>
               <p className="font-normal text-xs md:text-sm text-[#561530] w-full">
@@ -258,41 +338,42 @@ export default function LandingPage() {
               </p>
             </div>
             <div className="flex flex-col md:flex-row gap-5 md:gap-6 items-center justify-center w-full mt-5">
-              <Link href="/artikel/1" className="flex flex-col gap-2.5 items-start w-full md:w-[48%] hover:opacity-80 transition-opacity cursor-pointer group">
-                <div className="relative h-[160px] md:h-[200px] w-full rounded-tl-[12px] rounded-tr-[12px] overflow-hidden transition-transform group-hover:scale-105">
-                  <Image
-                    src={imgSiramTentangKami}
-                    alt="Artikel 1"
-                    fill
-                    className="object-cover transition-opacity group-hover:opacity-90"
-                    unoptimized
-                  />
-                </div>
-                <p className="font-bold text-xs md:text-sm text-[#561530] w-full group-hover:text-[#9e1c60] transition-colors">
-                  Cara Siramify Ngubah Budidaya Selada Merah Jadi Lebih Stabil...
-                </p>
-                <p className="font-normal text-[10px] md:text-xs text-[#561530]">20 October 2025</p>
-              </Link>
-              <Link href="/artikel/2" className="flex flex-col gap-2.5 items-start w-full md:w-[48%] hover:opacity-80 transition-opacity cursor-pointer group">
-                <div className="relative h-[160px] md:h-[200px] w-full rounded-tl-[12px] rounded-tr-[12px] overflow-hidden transition-transform group-hover:scale-105">
-                  <Image
-                    src={imgSiramTentangKami}
-                    alt="Artikel 2"
-                    fill
-                    className="object-cover transition-opacity group-hover:opacity-90"
-                    unoptimized
-                  />
-                </div>
-                <p className="font-bold text-xs md:text-sm text-[#561530] w-full group-hover:text-[#9e1c60] transition-colors">
-                  Cara Siramify Bikin Kontrol Suhu & Kelembapan Jadi Super Akurat
-                </p>
-                <p className="font-normal text-[10px] md:text-xs text-[#561530]">20 October 2025</p>
-              </Link>
+              {isLoading ? (
+                <>
+                  <Skeleton className="w-full md:w-[48%] h-[280px]" />
+                  <Skeleton className="w-full md:w-[48%] h-[280px]" />
+                </>
+              ) : articles.length > 0 ? (
+                articles.map((article) => (
+                  <Link href={`/artikel/${article.id}`} key={article.id} className="relative flex flex-col gap-2.5 items-start w-full md:w-[48%] rounded-xl p-6 transition cursor-pointer group overflow-hidden">
+                    {/* Hover Background Animation */}
+                    <div className="absolute inset-0 bg-[#eed2e1]/50 scale-0 transition-transform duration-250 ease-out group-hover:scale-100 rounded-xl origin-center -z-10" />
+
+                    <div className="relative h-[160px] md:h-[200px] w-full rounded-tl-[12px] rounded-tr-[12px] overflow-hidden">
+                      <Image
+                        src={article.image_url || imgSiramTentangKami}
+                        alt={article.title}
+                        fill
+                        className="object-cover"
+                        unoptimized
+                      />
+                    </div>
+                    <p className="font-bold text-xs md:text-sm text-[#561530] w-full line-clamp-2">
+                      {article.title}
+                    </p>
+                    <p className="font-normal text-[10px] md:text-xs text-[#561530]">
+                      {new Date(article.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                    </p>
+                  </Link>
+                ))
+              ) : (
+                <p className="text-center text-[#561530] text-sm">Tidak ada artikel.</p>
+              )}
             </div>
             <Link href="/artikel" className="border-2 border-[#9e1c60] border-solid box-border flex gap-2 items-center justify-center px-6 md:px-8 py-1.5 md:py-2 rounded-full bg-transparent hover:bg-[#9e1c60] active:brightness-75 transition group mt-4 cursor-pointer">
               <span className="font-bold text-xs md:text-sm text-[#9e1c60] group-hover:text-white transition">Lihat Lainnya</span>
             </Link>
-          </div>
+          </FadeIn>
         </section>
 
         {/* Produk Section */}
@@ -308,7 +389,7 @@ export default function LandingPage() {
             />
           </div>
 
-          <div className="relative z-10 flex flex-col gap-5 md:gap-6 items-center w-full px-6 md:px-8 lg:px-10 max-w-[900px] mx-auto">
+          <FadeIn className="relative z-10 flex flex-col gap-5 md:gap-6 items-center w-full px-6 md:px-8 lg:px-10 max-w-[900px] mx-auto">
             <div className="flex flex-col gap-2.5 md:gap-3 items-start text-center w-full">
               <h2 className="font-bold text-[#9e1c60] text-lg md:text-xl lg:text-2xl w-full">Produk</h2>
               <div className="font-normal text-xs md:text-sm text-[#561530] w-full">
@@ -318,53 +399,56 @@ export default function LandingPage() {
               </div>
             </div>
             <div className="flex flex-col md:flex-row gap-5 md:gap-6 items-center justify-center w-full mt-5">
-              <div className="flex flex-col gap-2.5 items-start w-full md:w-[48%]">
-                <div className="relative h-[180px] md:h-[240px] w-full rounded-tl-[16px] rounded-tr-[16px] overflow-hidden">
-                  <Image
-                    src={imgSiramTentangKami}
-                    alt="Bibit Selada Merah Premium"
-                    fill
-                    className="object-cover"
-                    unoptimized
-                  />
-                </div>
-                <div className="flex flex-col gap-2.5 items-start w-full">
-                  <p className="font-normal text-xs md:text-sm text-[#561530] w-full">Bibit Selada Merah Premium</p>
-                  <div className="flex items-center justify-between w-full">
-                    <p className="font-bold text-[#811844]">
-                      <span className="text-[10px] md:text-xs">Rp</span>
-                      <span className="text-xs md:text-sm">10.000</span>
-                    </p>
-                    <p className="text-[10px] md:text-xs text-[#561530]">224 Terjual</p>
+              {isLoading ? (
+                [1, 2, 3].map((i) => (
+                  <div key={i} className="relative flex flex-col gap-2.5 items-start w-full md:w-[30%] rounded-xl p-6">
+                    <Skeleton className="w-full aspect-square rounded-tl-[16px] rounded-tr-[16px]" />
+                    <div className="flex flex-col gap-2.5 items-start w-full">
+                      <Skeleton className="w-full h-4" />
+                      <div className="flex items-center justify-between w-full">
+                        <Skeleton className="w-1/3 h-4" />
+                        <Skeleton className="w-1/4 h-3" />
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-              <div className="flex flex-col gap-2.5 items-start w-full md:w-[48%]">
-                <div className="relative h-[180px] md:h-[240px] w-full rounded-tl-[16px] rounded-tr-[16px] overflow-hidden">
-                  <Image
-                    src={imgSiramTentangKami}
-                    alt="Pupuk Premium"
-                    fill
-                    className="object-cover"
-                    unoptimized
-                  />
-                </div>
-                <div className="flex flex-col gap-2.5 items-start w-full">
-                  <p className="font-normal text-xs md:text-sm text-[#561530] w-full">Pupuk Premium</p>
-                  <div className="flex items-center justify-between w-full">
-                    <p className="font-bold text-[#811844]">
-                      <span className="text-[10px] md:text-xs">Rp</span>
-                      <span className="text-xs md:text-sm">10.000</span>
-                    </p>
-                    <p className="text-[10px] md:text-xs text-[#561530]">224 Terjual</p>
-                  </div>
-                </div>
-              </div>
+                ))
+              ) : products.length > 0 ? (
+                products.map((product) => (
+                  <Link href={`/produk/${product.id}`} key={product.id} className="contents">
+                    <div className="relative flex flex-col gap-2.5 items-start w-full md:w-[30%] rounded-xl p-6 transition cursor-pointer group overflow-hidden">
+                      {/* Hover Background Animation */}
+                      <div className="absolute inset-0 bg-[#eed2e1]/50 scale-0 transition-transform duration-250 ease-out group-hover:scale-100 rounded-xl origin-center -z-10" />
+
+                      <div className="relative aspect-square w-full rounded-tl-[16px] rounded-tr-[16px] overflow-hidden">
+                        <Image
+                          src={product.foto || imgSiramTentangKami}
+                          alt={product.nama}
+                          fill
+                          className="object-cover"
+                          unoptimized
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2.5 items-start w-full">
+                        <p className="font-normal text-xs md:text-sm text-[#561530] w-full">{product.nama}</p>
+                        <div className="flex items-center justify-between w-full">
+                          <p className="font-bold text-[#811844]">
+                            <span className="text-[10px] md:text-xs">Rp</span>
+                            <span className="text-xs md:text-sm">{formatCurrency(product.harga)}</span>
+                          </p>
+                          <p className="text-[10px] md:text-xs text-[#561530]">{product.jumlah_terjual || 0} Terjual</p>
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                ))
+              ) : (
+                <p className="text-center text-[#561530] text-sm">Tidak ada produk.</p>
+              )}
             </div>
-            <button className="border-2 border-[#9e1c60] border-solid box-border flex gap-2 items-center justify-center px-6 md:px-8 py-1.5 md:py-2 rounded-full bg-transparent hover:bg-[#9e1c60] active:brightness-75 transition group mt-4 cursor-pointer">
+            <Link href="/produk" className="border-2 border-[#9e1c60] border-solid box-border flex gap-2 items-center justify-center px-6 md:px-8 py-1.5 md:py-2 rounded-full bg-transparent hover:bg-[#9e1c60] active:brightness-75 transition group mt-4 cursor-pointer">
               <span className="font-bold text-xs md:text-sm text-[#9e1c60] group-hover:text-white transition">Lihat Lainnya</span>
-            </button>
-          </div>
+            </Link>
+          </FadeIn>
         </section>
 
         {/* Kontak Section */}

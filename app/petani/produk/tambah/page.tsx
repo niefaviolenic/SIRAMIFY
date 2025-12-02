@@ -38,7 +38,7 @@ export default function TambahProdukPage() {
         setTimeout(() => setErrorMessage(""), 5000);
         return;
       }
-      
+
       // Clear error jika validasi berhasil
       setErrorMessage("");
 
@@ -70,17 +70,18 @@ export default function TambahProdukPage() {
 
       if (error) {
         console.error("Storage upload error:", error);
+        const err = error as any;
         console.error("Error details:", {
-          message: error.message,
-          statusCode: error.statusCode,
-          error: error.error
+          message: err.message,
+          statusCode: err.statusCode,
+          error: err.error
         });
-        
+
         // Jika bucket tidak ada atau error 404, throw error yang lebih jelas
-        if (error.message?.includes('Bucket') || error.statusCode === '404') {
+        if (err.message?.includes('Bucket') || err.statusCode === '404') {
           throw new Error("Bucket 'produk' belum dibuat di Supabase Storage. Silakan buat bucket terlebih dahulu.");
         }
-        
+
         throw error;
       }
 
@@ -136,7 +137,7 @@ export default function TambahProdukPage() {
 
       // Upload foto ke Supabase Storage
       let fotoUrl: string | null = null;
-      
+
       if (productImageFile) {
         try {
           console.log("Uploading image to storage...");
@@ -197,10 +198,10 @@ export default function TambahProdukPage() {
       }, 1500);
     } catch (error: any) {
       console.error("Error adding product:", error);
-      
+
       // Tampilkan error message yang lebih detail
       let errorMsg = "Gagal menambahkan produk. Silakan coba lagi.";
-      
+
       if (error?.message) {
         errorMsg = `Gagal menambahkan produk: ${error.message}`;
       } else if (error?.details) {
@@ -208,7 +209,7 @@ export default function TambahProdukPage() {
       } else if (typeof error === 'string') {
         errorMsg = `Gagal menambahkan produk: ${error}`;
       }
-      
+
       console.error("Full error object:", JSON.stringify(error, null, 2));
       setErrorMessage(errorMsg);
     } finally {

@@ -48,7 +48,7 @@ export default function PenyiramanPage() {
             hour = parseInt(timeMatch[1]);
           }
         }
-        
+
         const prediction = await predictStatus(record.suhu, record.kelembapan, hour);
         return { id: record.id, prediction };
       } catch (error) {
@@ -59,7 +59,7 @@ export default function PenyiramanPage() {
 
     try {
       const results = await Promise.all(predictionPromises);
-      
+
       // Update records dengan prediksi ML
       setRecords(prev => prev.map(record => {
         const result = results.find(r => r.id === record.id);
@@ -73,7 +73,7 @@ export default function PenyiramanPage() {
   const loadRecords = async () => {
     try {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
-      
+
       if (userError) {
         console.error("Error getting user:", userError);
         alert("Error: " + userError.message);
@@ -92,11 +92,11 @@ export default function PenyiramanPage() {
       const { count, error: countError } = await supabase
         .from("monitoring")
         .select("*", { count: "exact", head: true });
-      
+
       console.log("=== COUNT QUERY ===");
       console.log("Count result (ALL DATA):", count);
       console.log("Count error:", countError);
-      
+
       if (countError) {
         console.error("Error counting records:", countError);
         setTotalRecords(0);
@@ -121,7 +121,7 @@ export default function PenyiramanPage() {
         .select("*")
         .order("created_at", { ascending: false })
         .range(from, to);
-      
+
       console.log("=== QUERY RESULT ===");
       console.log("Fetching ALL data (no user_id filter)");
       console.log("Data received:", data);
@@ -149,7 +149,7 @@ export default function PenyiramanPage() {
         const mappedRecords = data.map((item: any, index: number) => {
           console.log("Processing item:", item);
           console.log("Item ID:", item.id, item.Id, item.ID);
-          
+
           // Format tanggal dari Tanggal/tanggal field atau created_at
           // Handle case sensitivity (PostgreSQL bisa lowercase atau uppercase)
           const tanggalValue = item.Tanggal || item.tanggal || item.TANGGAL;
@@ -159,7 +159,7 @@ export default function PenyiramanPage() {
             month: "numeric",
             year: "numeric",
           });
-          
+
           // Format waktu dari created_at atau generate secara manual
           let waktu = "";
           if (item.created_at) {
@@ -176,7 +176,7 @@ export default function PenyiramanPage() {
               // Jika parsing gagal, generate manual
             }
           }
-          
+
           // Jika waktu masih kosong, generate secara manual
           if (!waktu) {
             if (item.Waktu || item.waktu || item.WAKTU) {
@@ -212,7 +212,7 @@ export default function PenyiramanPage() {
 
           // Handle case sensitivity untuk ID - Supabase biasanya menggunakan lowercase 'id'
           const recordId = item.id || item.Id || item.ID;
-          
+
           if (!recordId) {
             console.warn("Record tanpa ID ditemukan:", item);
           }
@@ -226,13 +226,13 @@ export default function PenyiramanPage() {
             status,
             mlPrediction: null,
           };
-          
+
           console.log("Mapped record:", record);
           return record;
         });
-        
+
         setRecords(mappedRecords);
-        
+
         // Load ML predictions untuk semua records setelah data dimuat
         loadMLPredictions(mappedRecords);
       } else {
@@ -273,7 +273,7 @@ export default function PenyiramanPage() {
       } else {
         loadRecords();
       }
-      
+
       setShowDeleteModal(false);
       setDeleteId(null);
     } catch (error) {
@@ -295,31 +295,31 @@ export default function PenyiramanPage() {
       alert("ID data tidak valid. Tidak dapat mengedit data ini.");
       return;
     }
-    
+
     if (!id) {
       alert("ID data tidak ditemukan. Tidak dapat mengedit data ini.");
       return;
     }
-    
+
     router.push(`/petani/penyiraman/edit/${id}`);
   };
 
   const handleJumpToPage = () => {
     const pageNumber = parseInt(pageInput);
     const totalPages = Math.ceil(totalRecords / itemsPerPage);
-    
+
     if (isNaN(pageNumber) || pageNumber < 1) {
       alert("Masukkan nomor halaman yang valid (minimal 1)");
       setPageInput("");
       return;
     }
-    
+
     if (pageNumber > totalPages) {
       alert(`Halaman tidak valid. Maksimal halaman ${totalPages}`);
       setPageInput("");
       return;
     }
-    
+
     setCurrentPage(pageNumber);
     setPageInput("");
   };
@@ -378,7 +378,7 @@ export default function PenyiramanPage() {
             // Skip if error
           }
         }
-        
+
         if (!waktu) {
           if (item.Waktu || item.waktu || item.WAKTU) {
             waktu = item.Waktu || item.waktu || item.WAKTU;
@@ -433,11 +433,11 @@ export default function PenyiramanPage() {
       ];
 
       const csvContent = csvRows.join("\n");
-      
+
       // Add BOM for UTF-8 to support Indonesian characters in Excel
       const BOM = "\uFEFF";
       const blob = new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8;" });
-      
+
       // Create download link
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -519,142 +519,142 @@ export default function PenyiramanPage() {
           <div className="rounded-[15px] overflow-hidden shadow-lg" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)', fontFamily: 'Arial, Helvetica, sans-serif' }}>
             <div className="overflow-x-auto">
               <table className="w-full">
-              {/* Table Header */}
-              <thead>
-                <tr className="bg-[#eed2e1] h-[40px]">
-                  <th className="px-4 text-center font-bold text-[#181818] w-[62px]" style={{ fontSize: '14px' }}>
-                    No
-                  </th>
-                  <th className="px-4 text-center font-bold text-[#181818] min-w-[146px]" style={{ fontSize: '14px' }}>
-                    Tanggal
-                  </th>
-                  <th className="px-4 text-center font-bold text-[#181818] min-w-[146px]" style={{ fontSize: '14px' }}>
-                    Waktu
-                  </th>
-                  <th className="px-4 text-center font-bold text-[#181818] min-w-[146px]" style={{ fontSize: '14px' }}>
-                    Suhu
-                  </th>
-                  <th className="px-4 text-center font-bold text-[#181818] min-w-[146px]" style={{ fontSize: '14px' }}>
-                    Kelembapan
-                  </th>
-                  <th className="px-4 text-center font-bold text-[#181818] w-[100px]" style={{ fontSize: '14px' }}>
-                    Status
-                  </th>
-                  <th className="px-4 text-center font-bold text-[#181818] w-[120px]" style={{ fontSize: '14px' }}>
-                    Prediksi ML
-                  </th>
-                  <th className="px-4 text-center font-bold text-[#181818] min-w-[190px]" style={{ fontSize: '14px' }}>
-                    Aksi
-                  </th>
-                </tr>
-              </thead>
+                {/* Table Header */}
+                <thead>
+                  <tr className="bg-[#eed2e1] h-[40px]">
+                    <th className="px-4 text-center font-bold text-[#181818] w-[62px]" style={{ fontSize: '14px' }}>
+                      No
+                    </th>
+                    <th className="px-4 text-center font-bold text-[#181818] min-w-[146px]" style={{ fontSize: '14px' }}>
+                      Tanggal
+                    </th>
+                    <th className="px-4 text-center font-bold text-[#181818] min-w-[146px]" style={{ fontSize: '14px' }}>
+                      Waktu
+                    </th>
+                    <th className="px-4 text-center font-bold text-[#181818] min-w-[146px]" style={{ fontSize: '14px' }}>
+                      Suhu
+                    </th>
+                    <th className="px-4 text-center font-bold text-[#181818] min-w-[146px]" style={{ fontSize: '14px' }}>
+                      Kelembapan
+                    </th>
+                    <th className="px-4 text-center font-bold text-[#181818] w-[100px]" style={{ fontSize: '14px' }}>
+                      Status
+                    </th>
+                    <th className="px-4 text-center font-bold text-[#181818] w-[120px]" style={{ fontSize: '14px' }}>
+                      Prediksi ML
+                    </th>
+                    <th className="px-4 text-center font-bold text-[#181818] min-w-[190px]" style={{ fontSize: '14px' }}>
+                      Aksi
+                    </th>
+                  </tr>
+                </thead>
 
-              {/* Table Body */}
-              <tbody style={{ background: 'linear-gradient(to bottom, #ffffff 0%, #faf8fb 100%)' }}>
-                {isLoading ? (
-                  <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-gray-500" style={{ fontSize: '12px' }}>
-                      Memuat data...
-                    </td>
-                  </tr>
-                ) : records.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-gray-500" style={{ fontSize: '12px' }}>
-                      Tidak ada data
-                    </td>
-                  </tr>
-                ) : (
-                  records.map((record, index) => (
-                    <tr
-                      key={record.id}
-                      className="h-[50px] border-b border-[#9e1c60]/15 last:border-b-0 transition"
-                      style={{ 
-                        background: 'linear-gradient(to bottom, #ffffff 0%, #faf8fb 100%)',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'linear-gradient(to bottom, #faf5f8 0%, #f5e8f0 100%)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'linear-gradient(to bottom, #ffffff 0%, #faf8fb 100%)';
-                      }}
-                    >
-                      <td className="px-4 text-center">
-                        <p className="text-[#181818]" style={{ fontSize: '12px' }}>{(currentPage - 1) * itemsPerPage + index + 1}</p>
+                {/* Table Body */}
+                <tbody style={{ background: 'linear-gradient(to bottom, #ffffff 0%, #faf8fb 100%)' }}>
+                  {isLoading ? (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-8 text-center text-gray-500" style={{ fontSize: '12px' }}>
+                        Memuat data...
                       </td>
-                      <td className="px-4 text-center">
-                        <p className="text-[#181818]" style={{ fontSize: '12px' }}>{record.tanggal}</p>
+                    </tr>
+                  ) : records.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-8 text-center text-gray-500" style={{ fontSize: '12px' }}>
+                        Tidak ada data
                       </td>
-                      <td className="px-4 text-center">
-                        <p className="text-[#181818]" style={{ fontSize: '12px' }}>{record.waktu}</p>
-                      </td>
-                      <td className="px-4 text-center">
-                        <p className="text-[#181818]" style={{ fontSize: '12px' }}>{record.suhu}°</p>
-                      </td>
-                      <td className="px-4 text-center">
-                        <p className="text-[#181818]" style={{ fontSize: '12px' }}>{record.kelembapan}%</p>
-                      </td>
-                      <td className="px-4 text-center">
-                        <div className="flex items-center justify-center">
-                          <div
-                            className="rounded-[10px] px-4 py-1 h-[24px] min-w-[72px] flex items-center justify-center"
-                            style={{ backgroundColor: getStatusColor(record.status) }}
-                          >
-                            <p className="font-bold text-white text-center" style={{ fontSize: '12px' }}>
-                              {record.status}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 text-center">
-                        {record.mlPrediction ? (
+                    </tr>
+                  ) : (
+                    records.map((record, index) => (
+                      <tr
+                        key={record.id}
+                        className="h-[50px] border-b border-[#9e1c60]/15 last:border-b-0 transition"
+                        style={{
+                          background: 'linear-gradient(to bottom, #ffffff 0%, #faf8fb 100%)',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = 'linear-gradient(to bottom, #faf5f8 0%, #f5e8f0 100%)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'linear-gradient(to bottom, #ffffff 0%, #faf8fb 100%)';
+                        }}
+                      >
+                        <td className="px-4 text-center">
+                          <p className="text-[#181818]" style={{ fontSize: '12px' }}>{(currentPage - 1) * itemsPerPage + index + 1}</p>
+                        </td>
+                        <td className="px-4 text-center">
+                          <p className="text-[#181818]" style={{ fontSize: '12px' }}>{record.tanggal}</p>
+                        </td>
+                        <td className="px-4 text-center">
+                          <p className="text-[#181818]" style={{ fontSize: '12px' }}>{record.waktu}</p>
+                        </td>
+                        <td className="px-4 text-center">
+                          <p className="text-[#181818]" style={{ fontSize: '12px' }}>{record.suhu}°</p>
+                        </td>
+                        <td className="px-4 text-center">
+                          <p className="text-[#181818]" style={{ fontSize: '12px' }}>{record.kelembapan}%</p>
+                        </td>
+                        <td className="px-4 text-center">
                           <div className="flex items-center justify-center">
                             <div
-                              className="rounded-[10px] px-3 py-1 h-[24px] min-w-[72px] flex items-center justify-center"
-                              style={{ backgroundColor: getStatusColor(record.mlPrediction) }}
+                              className="rounded-[10px] px-4 py-1 h-[24px] min-w-[72px] flex items-center justify-center"
+                              style={{ backgroundColor: getStatusColor(record.status) }}
                             >
-                              <p className="font-bold text-white text-center" style={{ fontSize: '11px' }}>
-                                {record.mlPrediction}
+                              <p className="font-bold text-white text-center" style={{ fontSize: '12px' }}>
+                                {record.status}
                               </p>
                             </div>
                           </div>
-                        ) : (
-                          <p className="text-gray-400 text-center" style={{ fontSize: '11px' }}>
-                            Loading...
-                          </p>
-                        )}
-                      </td>
-                      <td className="px-4">
-                        <div className="flex items-center justify-center gap-[7px]">
-                          <button
-                            onClick={() => handleEdit(record.id)}
-                            disabled={!record.id || record.id.startsWith('temp-')}
-                            className="w-5 h-5 flex items-center justify-center hover:opacity-70 transition cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                            title={!record.id || record.id.startsWith('temp-') ? "ID tidak valid" : "Edit"}
-                          >
-                            <Image
-                              src={imgIconamoonEditLight}
-                              alt="Edit"
-                              width={20}
-                              height={20}
-                              className="object-contain"
-                              unoptimized
-                            />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteClick(record.id)}
-                            className="w-5 h-5 flex items-center justify-center hover:opacity-70 transition cursor-pointer"
-                            title="Delete"
-                          >
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                              <path d="M6 19C6 20.1 6.9 21 8 21H16C17.1 21 18 20.1 18 19V7H6V19ZM19 4H15.5L14.5 3H9.5L8.5 4H5V6H19V4Z" fill="#dc2626"/>
-                            </svg>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
+                        </td>
+                        <td className="px-4 text-center">
+                          {record.mlPrediction ? (
+                            <div className="flex items-center justify-center">
+                              <div
+                                className="rounded-[10px] px-3 py-1 h-[24px] min-w-[72px] flex items-center justify-center"
+                                style={{ backgroundColor: getStatusColor(record.mlPrediction) }}
+                              >
+                                <p className="font-bold text-white text-center" style={{ fontSize: '11px' }}>
+                                  {record.mlPrediction}
+                                </p>
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-gray-400 text-center" style={{ fontSize: '11px' }}>
+                              Loading...
+                            </p>
+                          )}
+                        </td>
+                        <td className="px-4">
+                          <div className="flex items-center justify-center gap-[7px]">
+                            <button
+                              onClick={() => handleEdit(record.id)}
+                              disabled={!record.id || record.id.startsWith('temp-')}
+                              className="w-5 h-5 flex items-center justify-center hover:opacity-70 transition cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                              title={!record.id || record.id.startsWith('temp-') ? "ID tidak valid" : "Edit"}
+                            >
+                              <Image
+                                src={imgIconamoonEditLight}
+                                alt="Edit"
+                                width={20}
+                                height={20}
+                                className="object-contain"
+                                unoptimized
+                              />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteClick(record.id)}
+                              className="w-5 h-5 flex items-center justify-center hover:opacity-70 transition cursor-pointer"
+                              title="Delete"
+                            >
+                              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M6 19C6 20.1 6.9 21 8 21H16C17.1 21 18 20.1 18 19V7H6V19ZM19 4H15.5L14.5 3H9.5L8.5 4H5V6H19V4Z" fill="#dc2626" />
+                              </svg>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
               </table>
             </div>
           </div>
@@ -674,7 +674,7 @@ export default function PenyiramanPage() {
                     }}
                     disabled={currentPage === 1}
                     className={currentPage === 1 ? "px-3 py-1 rounded-[10px] cursor-not-allowed pointer-events-none" : "px-3 py-1 rounded-[10px] border-2 border-[#9e1c60] text-[#9e1c60] hover:bg-[#9e1c60] hover:text-white transition"}
-                    style={{ 
+                    style={{
                       fontSize: '12px',
                       borderWidth: '2px',
                       ...(currentPage === 1 ? {
@@ -686,11 +686,11 @@ export default function PenyiramanPage() {
                   >
                     Sebelumnya
                   </button>
-                  
+
                   <span className="text-[#181818] px-2" style={{ fontSize: '12px' }}>
                     Halaman {currentPage} dari {Math.ceil(totalRecords / itemsPerPage)}
                   </span>
-                  
+
                   <button
                     onClick={() => {
                       if (currentPage >= Math.ceil(totalRecords / itemsPerPage)) return;
@@ -698,7 +698,7 @@ export default function PenyiramanPage() {
                     }}
                     disabled={currentPage >= Math.ceil(totalRecords / itemsPerPage)}
                     className={currentPage >= Math.ceil(totalRecords / itemsPerPage) ? "px-3 py-1 rounded-[10px] cursor-not-allowed pointer-events-none" : "px-3 py-1 rounded-[10px] border-2 border-[#9e1c60] text-[#9e1c60] hover:bg-[#9e1c60] hover:text-white transition"}
-                    style={{ 
+                    style={{
                       fontSize: '12px',
                       borderWidth: '2px',
                       ...(currentPage >= Math.ceil(totalRecords / itemsPerPage) ? {
@@ -712,7 +712,7 @@ export default function PenyiramanPage() {
                   </button>
                 </div>
               </div>
-              
+
               {/* Jump to Page Input */}
               <div className="flex items-center gap-2 justify-end">
                 <span className="text-[#181818]" style={{ fontSize: '12px' }}>Lompat ke:</span>
@@ -746,20 +746,21 @@ export default function PenyiramanPage() {
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
-        <div 
+        <div
           className="fixed inset-0 flex items-center justify-center z-50 py-8"
           onClick={handleDeleteCancel}
-          style={{ 
+          style={{
             animation: 'fadeIn 0.2s ease-in-out',
             fontFamily: 'Arial, Helvetica, sans-serif',
             backgroundColor: 'rgba(255, 255, 255, 0.5)'
           }}
         >
-          <div 
+          <div
             className="rounded-[15px] p-8 max-w-sm w-full mx-4 relative shadow-2xl"
-            style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}
             onClick={(e) => e.stopPropagation()}
-            style={{ 
+            style={{
+              background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)',
+              border: '1px solid rgba(158, 28, 96, 0.25)',
               animation: 'slideUp 0.3s ease-out',
               fontFamily: 'Arial, Helvetica, sans-serif'
             }}
@@ -770,14 +771,14 @@ export default function PenyiramanPage() {
                 <span className="text-4xl text-[#9e1c60] font-bold leading-none">!</span>
               </div>
             </div>
-            
+
             {/* Message */}
             <div className="text-center mb-8">
               <p className="text-[#181818] text-lg font-normal leading-relaxed" style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}>
                 Anda yakin ingin menghapus riwayat tersebut?
               </p>
             </div>
-            
+
             {/* Buttons */}
             <div className="flex gap-3">
               <button
