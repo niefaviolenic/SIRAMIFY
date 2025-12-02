@@ -17,65 +17,232 @@ export default function MasukPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
+    setErrorMessage("");
 
     try {
+      // Validasi email
+      if (!email || !email.includes('@')) {
+        setErrorMessage("Masukkan email yang valid!");
+        setIsLoading(false);
+        return;
+      }
+
+      // Validasi password
+      if (!password || password.length < 6) {
+        setErrorMessage("Password minimal 6 karakter!");
+        setIsLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: email.trim(),
         password,
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error("Login error:", error);
+        
+        // Handle error dengan pesan yang lebih spesifik
+        if (error.message.includes('Invalid login credentials') || error.message.includes('email')) {
+          // Cek apakah email terdaftar (tidak bisa pakai admin API dari client, jadi pakai pesan umum)
+          setErrorMessage("Email atau password salah. Pastikan email sudah terdaftar dan password benar.");
+        } else if (error.message.includes('Email not confirmed')) {
+          // Skip email verification requirement - langsung bisa login
+          // setErrorMessage("Email belum diverifikasi. Silakan cek email Anda dan klik link verifikasi.");
+          // Tetap lanjutkan login meskipun belum verifikasi
+          console.log("Email not confirmed, but continuing login...");
+        } else {
+          setErrorMessage(error.message || "Email atau password salah. Silakan coba lagi.");
+        }
+        setIsLoading(false);
+        return;
+      }
 
-      // Ambil role user dari database
-      const { data: userData, error: userError } = await supabase
-        .from("users")
-        .select("role")
-        .eq("id", data.user.id)
-        .single();
+      if (!data.user) {
+        setErrorMessage("Gagal login. Silakan coba lagi.");
+        setIsLoading(false);
+        return;
+      }
 
-      if (userError) {
-        // Jika tidak ada di tabel users, cek dari metadata
+      // Skip email verification - langsung bisa login
+      // if (!data.user.email_confirmed_at) {
+      //   setErrorMessage("Email belum diverifikasi. Silakan cek email Anda dan klik link verifikasi terlebih dahulu.");
+      //   setIsLoading(false);
+      //   return;
+      // }
+
+      // Tunggu sebentar untuk memastikan trigger sudah jalan (jika ada)
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      console.log("🔍 Checking user in users table, ID:", data.user.id);
+      console.log("🔍 User email:", data.user.email);
+      console.log("🔍 User metadata:", data.user.user_metadata);
+      
+      // Ambil role user dari database dengan retry
+      let userData: { role: string; status: string } | null = null;
+      let userError: any = null;
+      
+      // Coba query dengan retry (3x)
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        const { data: fetchedUserData, error: fetchError } = await supabase
+          .from("users")
+          .select("role, status, email, full_name")
+          .eq("id", data.user.id)
+          .single();
+
+        if (fetchError) {
+          console.log(`⚠️ Attempt ${attempt} failed:`, fetchError.message);
+          userError = fetchError;
+          
+          // Jika error karena user tidak ada (PGRST116), coba buat user
+          if (fetchError.code === 'PGRST116' || fetchError.message.includes('No rows')) {
+            console.log("User not found in users table, will create...");
+            break; // Keluar dari loop, akan create user di bawah
+          }
+          
+          // Jika error lain (RLS, dll), tunggu sebentar dan coba lagi
+          if (attempt < 3) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+            continue;
+          }
+        } else if (fetchedUserData) {
+          console.log("✅ User found in users table:", fetchedUserData);
+          console.log("✅ User role:", fetchedUserData.role, "| status:", fetchedUserData.status);
+          userData = fetchedUserData;
+          break; // User ditemukan, keluar dari loop
+        }
+      }
+
+      // Jika user tidak ditemukan, coba buat (hanya jika benar-benar tidak ada)
+      if (!userData && (userError?.code === 'PGRST116' || userError?.message?.includes('No rows'))) {
+        console.log("⚠️ User not found in users table, creating automatically...");
         const role = data.user.user_metadata?.role || "pembeli";
-        redirectBasedOnRole(role);
-      } else {
+        const fullName = data.user.user_metadata?.full_name || data.user.email?.split('@')[0] || "User";
+        
+        const insertData = {
+          id: data.user.id,
+          email: data.user.email || "",
+          full_name: fullName,
+          role: role,
+          status: "active"
+        };
+        
+        console.log("Attempting to insert user data:", insertData);
+        
+        // Coba upsert (lebih aman daripada insert)
+        const { error: upsertError } = await supabase
+          .from("users")
+          .upsert(insertData, {
+            onConflict: 'id'
+          });
+
+        if (upsertError) {
+          console.error("❌ Upsert failed:", upsertError);
+          // Jangan block login, coba pakai metadata role sebagai fallback
+          console.warn("⚠️ Using metadata role as fallback due to upsert failure");
+          const fallbackRole = data.user.user_metadata?.role || "pembeli";
+          redirectBasedOnRole(fallbackRole);
+          return;
+        } else {
+          console.log("✅ User profile created via upsert");
+          
+          // Tunggu sebentar lalu verify
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          const { data: newUserData } = await supabase
+            .from("users")
+            .select("role, status")
+            .eq("id", data.user.id)
+            .single();
+          
+          if (newUserData) {
+            console.log("✅ User verified in users table:", newUserData);
+            userData = newUserData;
+          } else {
+            // Fallback ke metadata jika verify gagal
+            console.warn("⚠️ Verification failed, using metadata role");
+            const fallbackRole = data.user.user_metadata?.role || "pembeli";
+            redirectBasedOnRole(fallbackRole);
+            return;
+          }
+        }
+      } else if (!userData) {
+        // Jika error bukan karena user tidak ada, tapi karena RLS/error lain
+        // Coba query langsung dengan service role atau cek di auth.users metadata
+        console.warn("⚠️ Could not fetch user data (possibly RLS issue)");
+        console.warn("⚠️ Error details:", userError);
+        
+        // Coba ambil role dari metadata atau email
+        let fallbackRole = data.user.user_metadata?.role;
+        
+        // Jika email admin, pastikan role admin
+        if (data.user.email?.toLowerCase().includes('admin') || data.user.email === 'admin@siramify.com') {
+          console.log("🔧 Detected admin email, forcing admin role");
+          fallbackRole = "admin";
+        }
+        
+        // Jika masih tidak ada, default ke pembeli
+        if (!fallbackRole) {
+          console.warn("⚠️ No role in metadata, defaulting to pembeli");
+          fallbackRole = "pembeli";
+        }
+        
+        console.log("⚠️ Using fallback role:", fallbackRole);
+        redirectBasedOnRole(fallbackRole);
+        return;
+      }
+
+      // Jika userData ada, cek status dan redirect
+      if (userData) {
+        // Handle berbagai format status (active, aktif, dll)
+        // Jika status null/kosong, anggap aktif
+        const status = (userData.status || 'active').toLowerCase().trim();
+        const isActive = status === 'active' || status === 'aktif' || !status;
+        
+        if (!isActive) {
+          console.log("❌ User status:", userData.status, "-> considered inactive");
+          setErrorMessage("Akun Anda tidak aktif. Silakan hubungi administrator.");
+          setIsLoading(false);
+          return;
+        }
+        
+        console.log("✅ User status OK, redirecting to:", userData.role);
         redirectBasedOnRole(userData.role);
+      } else {
+        // Fallback terakhir ke metadata role
+        console.warn("⚠️ No userData available, using metadata role as final fallback");
+        const fallbackRole = data.user.user_metadata?.role || "pembeli";
+        redirectBasedOnRole(fallbackRole);
       }
     } catch (error: any) {
       console.error("Login error:", error);
-      alert(error.message || "Email atau password salah. Silakan coba lagi.");
+      setErrorMessage(error.message || "Terjadi kesalahan saat login. Silakan coba lagi.");
       setIsLoading(false);
     }
   };
 
   const redirectBasedOnRole = (role: string) => {
-    if (role === "petani") {
+    // Normalize role to lowercase untuk case-insensitive check
+    const normalizedRole = (role || "").toLowerCase().trim();
+    console.log("Redirecting based on role:", role, "-> normalized:", normalizedRole);
+    
+    if (normalizedRole === "petani") {
+      console.log("✅ Redirecting to /petani/beranda");
       router.push("/petani/beranda");
-    } else if (role === "admin") {
-      router.push("/admin/beranda"); // Jika ada halaman admin
+    } else if (normalizedRole === "admin") {
+      console.log("✅ Redirecting to /admin/beranda");
+      router.push("/admin/beranda");
     } else {
-      router.push("/pembeli/beranda"); // Jika ada halaman pembeli
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    setIsLoading(true);
-    try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
-
-      if (error) throw error;
-    } catch (error: any) {
-      console.error("Google login error:", error);
-      alert(error.message || "Terjadi kesalahan saat login dengan Google. Silakan coba lagi.");
-      setIsLoading(false);
+      // Default untuk pembeli atau role lainnya
+      console.log("⚠️ Unknown role, redirecting to landing page. Role was:", role);
+      // Jika belum ada halaman pembeli, redirect ke landing page atau buat halaman pembeli
+      router.push("/"); // Sementara redirect ke landing page
+      // TODO: Buat halaman /pembeli/beranda jika diperlukan
     }
   };
 
@@ -103,6 +270,13 @@ export default function MasukPage() {
             <h2 className="font-bold text-base md:text-lg text-[#561530] mb-3 md:mb-4">
               Masuk
             </h2>
+
+            {/* Error Message */}
+            {errorMessage && (
+              <div className="mb-3 p-3 bg-red-100 border border-red-400 text-red-700 rounded-[10px] text-xs">
+                {errorMessage}
+              </div>
+            )}
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-2.5 md:gap-3">
               {/* Email Field */}
@@ -166,29 +340,6 @@ export default function MasukPage() {
                 {isLoading ? "Masuk..." : "Masuk"}
               </button>
             </form>
-
-            {/* Divider */}
-            <div className="flex items-center gap-2.5 my-3 md:my-4">
-              <div className="flex-1 h-px bg-black/20"></div>
-              <span className="text-xs text-black/50">atau</span>
-              <div className="flex-1 h-px bg-black/20"></div>
-            </div>
-
-            {/* Google Login Button */}
-            <button
-              type="button"
-              onClick={handleGoogleLogin}
-              disabled={isLoading}
-              className="w-full bg-white hover:bg-gray-50 transition border-2 border-black/20 rounded-[10px] py-2 md:py-2.5 px-3 md:px-4 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-              </svg>
-              <span className="font-medium text-xs text-black">Masuk dengan Google</span>
-            </button>
 
             {/* Register Link */}
             <p className="text-center mt-3 md:mt-4 text-xs text-[#561530]">

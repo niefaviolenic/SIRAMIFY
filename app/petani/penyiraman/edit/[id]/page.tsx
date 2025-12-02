@@ -244,7 +244,7 @@ export default function EditPenyiramanPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex">
+    <div className="min-h-screen bg-[#fef7f5] flex">
       {/* Sidebar */}
       <PetaniSidebar />
 
@@ -255,8 +255,8 @@ export default function EditPenyiramanPage() {
           <div className="mb-8">
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
-                <h1 className="font-bold text-2xl text-black">Edit Data Penyiraman</h1>
-                <p className="text-xs text-black mt-1">Penyiraman/Edit Data Penyiraman</p>
+                <h1 className="font-bold text-3xl text-black">Edit Data Penyiraman</h1>
+                <p className="text-sm text-black mt-1">Penyiraman/Edit Data Penyiraman</p>
               </div>
               <div className="flex-shrink-0">
                 <PetaniHeader />
@@ -275,7 +275,7 @@ export default function EditPenyiramanPage() {
                 {/* Row 1: Tanggal & Waktu */}
                 <div className="flex gap-6">
                   <div className="flex flex-col gap-[11px] flex-1">
-                    <label className="font-bold text-black" style={{ fontSize: '12px' }}>
+                    <label className="font-bold text-black" style={{ fontSize: '14px' }}>
                       Tanggal Penyiraman
                     </label>
                     <input
@@ -284,12 +284,12 @@ export default function EditPenyiramanPage() {
                       onChange={(e) => setFormData({ ...formData, tanggal: e.target.value })}
                       placeholder="mm/dd/yy"
                       className={`bg-[#f5f5f5] h-[35px] px-3 py-2 rounded-[5px] outline-none focus:ring-2 focus:ring-[#9e1c60] ${formData.tanggal ? 'text-black' : 'text-black/50'}`}
-                      style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '10px' }}
+                      style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '14px' }}
                       required
                     />
                   </div>
                   <div className="flex flex-col gap-[11px] flex-1">
-                    <label className="font-bold text-black" style={{ fontSize: '12px' }}>
+                    <label className="font-bold text-black" style={{ fontSize: '14px' }}>
                       Waktu Penyiraman
                     </label>
                     <input
@@ -298,7 +298,7 @@ export default function EditPenyiramanPage() {
                       onChange={(e) => setFormData({ ...formData, waktu: e.target.value })}
                       placeholder="12:00"
                       className={`bg-[#f5f5f5] h-[35px] px-3 py-2 rounded-[5px] outline-none focus:ring-2 focus:ring-[#9e1c60] ${formData.waktu && formData.waktu.trim() !== "" ? 'text-black' : 'text-black/50'}`}
-                      style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '10px' }}
+                      style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '14px' }}
                       required
                     />
                   </div>
@@ -307,7 +307,7 @@ export default function EditPenyiramanPage() {
                 {/* Row 2: Suhu & Kelembapan */}
                 <div className="flex gap-6">
                   <div className="flex flex-col gap-[11px] flex-1">
-                    <label className="font-bold text-black" style={{ fontSize: '12px' }}>
+                    <label className="font-bold text-black" style={{ fontSize: '14px' }}>
                       Suhu
                     </label>
                     <input
@@ -316,12 +316,12 @@ export default function EditPenyiramanPage() {
                       onChange={(e) => setFormData({ ...formData, suhu: e.target.value })}
                       placeholder="26.5°"
                       className={`bg-[#f5f5f5] h-[35px] px-3 py-2 rounded-[5px] outline-none focus:ring-2 focus:ring-[#9e1c60] ${formData.suhu ? 'text-black' : 'text-black/50'}`}
-                      style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '10px' }}
+                      style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '14px' }}
                       required
                     />
                   </div>
                   <div className="flex flex-col gap-[11px] flex-1">
-                    <label className="font-bold text-black" style={{ fontSize: '12px' }}>
+                    <label className="font-bold text-black" style={{ fontSize: '14px' }}>
                       Kelembapan
                     </label>
                     <input
@@ -330,7 +330,7 @@ export default function EditPenyiramanPage() {
                       onChange={(e) => setFormData({ ...formData, kelembapan: e.target.value })}
                       placeholder="53%"
                       className={`bg-[#f5f5f5] h-[35px] px-3 py-2 rounded-[5px] outline-none focus:ring-2 focus:ring-[#9e1c60] ${formData.kelembapan ? 'text-black' : 'text-black/50'}`}
-                      style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '10px' }}
+                      style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '14px' }}
                       required
                     />
                   </div>
@@ -350,7 +350,7 @@ export default function EditPenyiramanPage() {
                       className={`bg-[#f5f5f5] h-[35px] px-3 py-2 pr-8 rounded-[5px] border-0 outline-none focus:ring-2 focus:ring-inset focus:ring-[#9e1c60] appearance-none w-full ${formData.status ? 'text-black' : 'text-black/50'}`}
                       style={{ 
                         fontFamily: 'Arial, Helvetica, sans-serif', 
-                        fontSize: '10px'
+                        fontSize: '12px'
                       }}
                       required
                     >
@@ -382,7 +382,7 @@ export default function EditPenyiramanPage() {
                     type="submit"
                     disabled={isSaving}
                     className="bg-[#27a73d] h-[35px] rounded-[5px] text-white font-bold hover:bg-[#1f8a31] transition-colors disabled:opacity-50"
-                    style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '12px' }}
+                    style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '14px' }}
                   >
                     {isSaving ? "Menyimpan..." : "Simpan"}
                   </button>
@@ -390,7 +390,7 @@ export default function EditPenyiramanPage() {
                     type="button"
                     onClick={handleBack}
                     className="bg-[#e09028] h-[35px] rounded-[5px] text-white font-bold hover:bg-[#c77a1f] transition-colors"
-                    style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '12px' }}
+                    style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '14px' }}
                   >
                     Kembali
                   </button>

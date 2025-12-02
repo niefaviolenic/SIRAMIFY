@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Image from "next/image";
 import PetaniSidebar from "@/app/components/PetaniSidebar";
 import PetaniHeader from "@/app/components/PetaniHeader";
+import ProfilModal from "@/app/components/ProfilModal";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/utils/supabaseClient";
 
@@ -41,6 +42,9 @@ export default function PengaturanPage() {
   });
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
+  const [isProfilModalOpen, setIsProfilModalOpen] = useState(false);
+  const [storeImage, setStoreImage] = useState(imgImage13);
+  const storeImageInputRef = useRef<HTMLInputElement>(null);
   const [riwayatPembelian] = useState([
     {
       id: "1",
@@ -79,9 +83,9 @@ export default function PengaturanPage() {
       case "Sudah Bayar":
         return "#106113";
       case "Belum Bayar":
-        return "#ba0b0b";
-      case "Refund":
-        return "#ff9500";
+        return "#dc2626";
+      case "Dikembalikan":
+        return "#6b7280";
       default:
         return "#6b7280";
     }
@@ -129,6 +133,33 @@ export default function PengaturanPage() {
     }
   };
 
+  const handleStoreImageClick = () => {
+    storeImageInputRef.current?.click();
+  };
+
+  const handleStoreImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validasi tipe file
+      if (!file.type.startsWith('image/')) {
+        alert('File harus berupa gambar');
+        return;
+      }
+      
+      // Validasi ukuran file (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Ukuran file maksimal 5MB');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setStoreImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleDeleteAccount = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -151,19 +182,19 @@ export default function PengaturanPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex">
+    <div className="min-h-screen bg-[#fef7f5] flex">
       {/* Sidebar */}
       <PetaniSidebar />
 
       {/* Main Content */}
-      <div className="flex-3 ml-[200px] min-h-screen">
+      <div className="flex-1 ml-[200px] min-h-screen bg-[#fef7f5]" style={{ minHeight: '100vh', width: 'calc(100% - 180px)', paddingBottom: '40px' }}>
         <div className="p-8" style={{ paddingLeft: '10px' }}>
           {/* Header */}
           <div className="mb-8">
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
-                <h1 className="font-bold text-2xl text-black">Pengaturan</h1>
-                <p className="text-xs text-black mt-1">Pengaturan</p>
+                <h1 className="font-bold text-3xl text-black">Pengaturan</h1>
+                <p className="text-sm text-black mt-1">Pengaturan</p>
               </div>
               <div className="flex-shrink-0">
                 <PetaniHeader />
@@ -174,15 +205,15 @@ export default function PengaturanPage() {
           {/* Status Sistem & Notifikasi Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             {/* Robot Penyiram Card */}
-            <div className="border border-[#9e1c60] rounded-[10px] p-4 bg-white">
-              <h2 className="font-bold text-black mb-3" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+            <div className="rounded-[15px] p-4 shadow-lg hover:shadow-xl transition-all duration-300" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}>
+              <h2 className="font-bold text-black mb-3" style={{ fontSize: '14px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
                 Robot Penyiram
               </h2>
               
               {/* Status Koneksi */}
               <div className="flex items-center gap-2 mb-3">
                 <div className={`w-2 h-2 rounded-full ${robotStatus.isOnline ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                <span className="font-normal text-black" style={{ fontSize: '10px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                <span className="font-normal text-black" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
                   {robotStatus.isOnline ? "Online" : "Offline"}
                 </span>
               </div>
@@ -190,34 +221,34 @@ export default function PengaturanPage() {
               {/* Info Ringkas - Grid 2 kolom */}
               <div className="grid grid-cols-2 gap-2 mb-3">
                 <div>
-                  <p className="text-black mb-1" style={{ fontSize: '8px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                  <p className="text-black mb-1" style={{ fontSize: '10px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
                     Device
                   </p>
-                  <p className="font-bold text-black" style={{ fontSize: '10px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                  <p className="font-bold text-black" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
                     {robotStatus.namaDevice}
                   </p>
                 </div>
                 <div>
-                  <p className="text-black mb-1" style={{ fontSize: '8px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                  <p className="text-black mb-1" style={{ fontSize: '10px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
                     Firmware
                   </p>
-                  <p className="font-bold text-black" style={{ fontSize: '10px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                  <p className="font-bold text-black" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
                     {robotStatus.versiFirmware}
                   </p>
                 </div>
                 <div>
-                  <p className="text-black mb-1" style={{ fontSize: '8px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                  <p className="text-black mb-1" style={{ fontSize: '10px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
                     Penyiraman Hari Ini
                   </p>
-                  <p className="font-bold text-black" style={{ fontSize: '10px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                  <p className="font-bold text-black" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
                     {robotStatus.totalPenyiramanHariIni}x
                   </p>
                 </div>
                 <div>
-                  <p className="text-black mb-1" style={{ fontSize: '8px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                  <p className="text-black mb-1" style={{ fontSize: '10px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
                     Terakhir Aktif
                   </p>
-                  <p className="font-bold text-black" style={{ fontSize: '10px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                  <p className="font-bold text-black" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
                     {robotStatus.terakhirAktif}
                   </p>
                 </div>
@@ -230,14 +261,14 @@ export default function PengaturanPage() {
                 className={`w-full h-[35px] rounded-[5px] text-white font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center ${
                   robotStatus.isRunning ? 'bg-red-600 hover:bg-red-700' : 'bg-[#27a73d] hover:bg-[#1f8a31]'
                 }`}
-                style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '12px' }}
+                style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '14px' }}
               >
                 {robotStatus.isRunning ? "Stop Penyiraman" : "Start Penyiraman"}
               </button>
             </div>
 
             {/* Notifikasi Card */}
-            <div className="border border-[#9e1c60] rounded-[10px] p-4 bg-white">
+            <div className="rounded-[15px] p-4 shadow-lg hover:shadow-xl transition-all duration-300" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}>
               <div className="flex items-center gap-2 mb-3">
                 <Image
                   src={imgMdiBellNotificationOutline}
@@ -259,7 +290,7 @@ export default function PengaturanPage() {
                   { key: 'stokMenipis' as const, label: 'Notifikasi Stok Menipis' },
                 ].map((item) => (
                   <div key={item.key} className="flex items-center justify-between">
-                    <span className="text-black" style={{ fontSize: '10px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                    <span className="text-black" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
                       {item.label}
                     </span>
                     <div 
@@ -276,7 +307,7 @@ export default function PengaturanPage() {
                           unoptimized
                         />
                       ) : (
-                        <div className="w-5 h-5 border border-[#9e1c60] rounded-full"></div>
+                        <div className="w-5 h-5 border-2 border-[#9e1c60] rounded-full"></div>
                       )}
                     </div>
                   </div>
@@ -286,7 +317,7 @@ export default function PengaturanPage() {
           </div>
 
           {/* Riwayat Pembelian */}
-          <div className="border border-[#9e1c60] rounded-[10px] p-4 bg-white mb-4">
+          <div className="rounded-[15px] p-4 shadow-lg mb-4" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}>
             <h2 className="font-bold text-black mb-4" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
               Riwayat Pembelian
             </h2>
@@ -310,10 +341,10 @@ export default function PengaturanPage() {
                   
                   {/* Info Produk */}
                   <div className="flex-1 min-w-0">
-                    <p className="font-bold text-black mb-1 truncate" style={{ fontSize: '10px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                    <p className="font-bold text-black mb-1 truncate" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
                       {item.namaProduk}
                     </p>
-                    <p className="text-black" style={{ fontSize: '8px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                    <p className="text-black" style={{ fontSize: '10px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
                       {item.jumlah} item • {item.totalHarga} • {item.tanggalPembelian}
                     </p>
                   </div>
@@ -321,10 +352,10 @@ export default function PengaturanPage() {
                   {/* Status Badges */}
                   <div className="flex-shrink-0 flex flex-col gap-1 items-end">
                     <div
-                      className="rounded-[5px] px-2 py-1"
+                      className="rounded-[10px] px-2 py-1 h-[24px] flex items-center justify-center"
                       style={{
                         backgroundColor: getStatusPembayaranColor(item.statusPembayaran),
-                        fontSize: '8px',
+                        fontSize: '10px',
                         fontFamily: 'Arial, Helvetica, sans-serif',
                         color: 'white',
                         fontWeight: 'bold'
@@ -333,10 +364,10 @@ export default function PengaturanPage() {
                       {item.statusPembayaran}
                     </div>
                     <div
-                      className="rounded-[5px] px-2 py-1"
+                      className="rounded-[10px] px-2 py-1 h-[24px] flex items-center justify-center"
                       style={{
                         backgroundColor: getStatusPengirimanColor(item.statusPengiriman),
-                        fontSize: '8px',
+                        fontSize: '10px',
                         fontFamily: 'Arial, Helvetica, sans-serif',
                         color: 'white',
                         fontWeight: 'bold'
@@ -351,20 +382,41 @@ export default function PengaturanPage() {
           </div>
 
           {/* Pengaturan Umum */}
-          <div className="border border-[#9e1c60] rounded-[10px] p-4 bg-white mb-4">
-            <h2 className="font-bold text-black mb-4" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
-              Pengaturan Umum
-            </h2>
+          <div className="rounded-[15px] p-4 shadow-lg mb-4" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-bold text-black" style={{ fontSize: '16px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                Pengaturan Umum
+              </h2>
+              <button
+                onClick={() => setIsProfilModalOpen(true)}
+                className="bg-[#9e1c60] h-[42px] px-6 rounded-[10px] text-white font-bold hover:bg-[#7d1650] hover:shadow-md transition-all duration-200 flex items-center justify-center gap-3 shadow-sm"
+                style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '14px' }}
+              >
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M12 12C14.21 12 16 10.21 16 8C16 5.79 14.21 4 12 4C9.79 4 8 5.79 8 8C8 10.21 9.79 12 12 12ZM12 14C9.33 14 4 15.34 4 18V20H20V18C20 15.34 14.67 14 12 14Z"
+                    fill="currentColor"
+                  />
+                </svg>
+                Lihat Profil Akun
+              </button>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex flex-col gap-[11px]">
-                <label className="font-bold text-black" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                <label className="font-bold text-black" style={{ fontSize: '14px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
                   Bahasa
                 </label>
                 <select
                   value={generalSettings.bahasa}
                   onChange={(e) => setGeneralSettings({ ...generalSettings, bahasa: e.target.value })}
                   className="bg-[#f5f5f5] h-[35px] px-3 py-2 rounded-[5px] outline-none focus:ring-2 focus:ring-[#9e1c60] text-black"
-                  style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '10px' }}
+                  style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '13px' }}
                 >
                   <option value="id">Bahasa Indonesia</option>
                   <option value="en">English</option>
@@ -372,14 +424,14 @@ export default function PengaturanPage() {
               </div>
 
               <div className="flex flex-col gap-[11px]">
-                <label className="font-bold text-black" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                <label className="font-bold text-black" style={{ fontSize: '14px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
                   Tema
                 </label>
                 <select
                   value={generalSettings.tema}
                   onChange={(e) => setGeneralSettings({ ...generalSettings, tema: e.target.value })}
                   className="bg-[#f5f5f5] h-[35px] px-3 py-2 rounded-[5px] outline-none focus:ring-2 focus:ring-[#9e1c60] text-black"
-                  style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '10px' }}
+                  style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '13px' }}
                 >
                   <option value="light">Terang</option>
                   <option value="dark">Gelap</option>
@@ -391,17 +443,17 @@ export default function PengaturanPage() {
             <div className="mt-6 pt-4 border-t border-gray-200">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="font-bold text-black mb-1" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                  <h3 className="font-bold text-black mb-1" style={{ fontSize: '14px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
                     Hapus Akun
                   </h3>
-                  <p className="text-black" style={{ fontSize: '10px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                  <p className="text-black" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
                     Menghapus akun akan menghapus semua data Anda secara permanen
                   </p>
                 </div>
                 <button
                   onClick={() => setShowDeleteAccountModal(true)}
                   className="bg-red-600 h-[35px] px-6 rounded-[5px] text-white font-bold hover:bg-red-700 transition-colors flex items-center justify-center"
-                  style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '12px' }}
+                  style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '14px' }}
                 >
                   Hapus Akun
                 </button>
@@ -410,35 +462,52 @@ export default function PengaturanPage() {
           </div>
 
           {/* Pengaturan Toko Section */}
-          <div className="border border-[#9e1c60] rounded-[10px] p-4 bg-white">
-            <h2 className="font-bold text-black mb-4" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+          <div className="rounded-[15px] p-4 shadow-lg" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}>
+            <h2 className="font-bold text-black mb-4" style={{ fontSize: '16px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
               Pengaturan Toko
             </h2>
 
             <form onSubmit={handleSubmit}>
               <div className="flex gap-6 mb-4">
                 {/* Store Image */}
-                <div className="flex-shrink-0">
-                  <div className="relative w-[120px] h-[120px] rounded-full overflow-hidden border border-[#9e1c60]">
+                <div className="flex-shrink-0 relative">
+                  <div className="relative w-[120px] h-[120px] rounded-full overflow-hidden border-2 border-[#9e1c60]">
                     <Image
-                      src={imgImage13}
+                      src={storeImage}
                       alt="Store"
                       fill
                       className="object-cover"
                       unoptimized
                     />
-                    {/* Edit Icon */}
-                    <div className="absolute bottom-0 right-0 w-[30px] h-[30px] bg-[#f5f5f5] rounded-full flex items-center justify-center cursor-pointer hover:bg-[#e0e0e0] transition-colors border border-[#9e1c60]">
-                      <Image
-                        src={imgMaterialSymbolsEditOutline}
-                        alt="Edit"
-                        width={16}
-                        height={16}
-                        className="object-contain"
-                        style={{ filter: 'brightness(0) saturate(100%) invert(27%) sepia(51%) saturate(2878%) hue-rotate(300deg) brightness(92%) contrast(92%)' }}
-                        unoptimized
+                    {/* Hidden file input */}
+                    <input
+                      type="file"
+                      ref={storeImageInputRef}
+                      onChange={handleStoreImageChange}
+                      accept="image/*"
+                      className="hidden"
+                    />
+                  </div>
+                  {/* Edit Icon - Outside the circle */}
+                  <div 
+                    onClick={handleStoreImageClick}
+                    className="absolute bottom-0 right-0 w-[36px] h-[36px] bg-white rounded-full flex items-center justify-center cursor-pointer hover:bg-[#f0f0f0] transition-colors border-2 border-gray-300 shadow-lg z-10"
+                    style={{ transform: 'translate(8px, 8px)' }}
+                  >
+                    <svg
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
+                        fill="#000000"
+                        stroke="#000000"
+                        strokeWidth="1"
                       />
-                    </div>
+                    </svg>
                   </div>
                 </div>
 
@@ -446,7 +515,7 @@ export default function PengaturanPage() {
                 <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Nama Toko */}
                   <div className="flex flex-col gap-[11px]">
-                    <label className="font-bold text-black" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                    <label className="font-bold text-black" style={{ fontSize: '14px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
                       Nama Toko
                     </label>
                     <input
@@ -454,14 +523,14 @@ export default function PengaturanPage() {
                       value={formData.namaToko}
                       onChange={(e) => setFormData({ ...formData, namaToko: e.target.value })}
                       className="bg-[#f5f5f5] h-[35px] px-3 py-2 rounded-[5px] outline-none focus:ring-2 focus:ring-[#9e1c60] text-black"
-                      style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '10px' }}
+                      style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '13px' }}
                       required
                     />
                   </div>
 
                   {/* Nomor HP */}
                   <div className="flex flex-col gap-[11px]">
-                    <label className="font-bold text-black" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                    <label className="font-bold text-black" style={{ fontSize: '14px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
                       Nomor HP
                     </label>
                     <input
@@ -469,7 +538,7 @@ export default function PengaturanPage() {
                       value={formData.nomorHP}
                       onChange={(e) => setFormData({ ...formData, nomorHP: e.target.value })}
                       className="bg-[#f5f5f5] h-[35px] px-3 py-2 rounded-[5px] outline-none focus:ring-2 focus:ring-[#9e1c60] text-black"
-                      style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '10px' }}
+                      style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '13px' }}
                       required
                     />
                   </div>
@@ -478,7 +547,7 @@ export default function PengaturanPage() {
 
               {/* Alamat Lengkap */}
               <div className="flex flex-col gap-[11px] mb-4">
-                <label className="font-bold text-black" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                <label className="font-bold text-black" style={{ fontSize: '14px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
                   Alamat Lengkap
                 </label>
                 <input
@@ -486,14 +555,14 @@ export default function PengaturanPage() {
                   value={formData.alamatLengkap}
                   onChange={(e) => setFormData({ ...formData, alamatLengkap: e.target.value })}
                   className="bg-[#f5f5f5] h-[35px] px-3 py-2 rounded-[5px] outline-none focus:ring-2 focus:ring-[#9e1c60] text-black"
-                  style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '10px' }}
+                  style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '13px' }}
                   required
                 />
               </div>
 
               {/* Deskripsi Toko */}
               <div className="flex flex-col gap-[11px] mb-4">
-                <label className="font-bold text-black" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                <label className="font-bold text-black" style={{ fontSize: '14px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
                   Deskripsi Toko
                 </label>
                 <textarea
@@ -501,7 +570,7 @@ export default function PengaturanPage() {
                   onChange={(e) => setFormData({ ...formData, deskripsiToko: e.target.value })}
                   rows={4}
                   className="bg-[#f5f5f5] px-3 py-2 rounded-[5px] outline-none focus:ring-2 focus:ring-[#9e1c60] resize-none text-black"
-                  style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '10px' }}
+                  style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '13px' }}
                   required
                 />
               </div>
@@ -512,7 +581,7 @@ export default function PengaturanPage() {
                   type="submit"
                   disabled={isSaving}
                   className="bg-[#27a73d] h-[35px] px-6 rounded-[5px] text-white font-bold hover:bg-[#1f8a31] transition-colors disabled:opacity-50 flex items-center justify-center"
-                  style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '12px' }}
+                  style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '14px' }}
                 >
                   {isSaving ? "Menyimpan..." : "Simpan Data Toko"}
                 </button>
@@ -534,9 +603,10 @@ export default function PengaturanPage() {
           }}
         >
           <div
-            className="bg-white rounded-[15px] border border-[#9e1c60] p-6 max-w-md w-full mx-4 relative"
+            className="rounded-[15px] p-6 max-w-md w-full mx-4 relative shadow-2xl"
             onClick={(e) => e.stopPropagation()}
             style={{
+              background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)',
               animation: 'slideUp 0.3s ease-out',
               fontFamily: 'Arial, Helvetica, sans-serif'
             }}
@@ -551,14 +621,14 @@ export default function PengaturanPage() {
               <button
                 onClick={() => setShowDeleteAccountModal(false)}
                 className="bg-[#e09028] h-[35px] px-6 rounded-[5px] text-white font-bold hover:bg-[#c77a1f] transition-colors flex items-center justify-center"
-                style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '12px' }}
+                style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '14px' }}
               >
                 Batal
               </button>
               <button
                 onClick={handleDeleteAccount}
                 className="bg-red-600 h-[35px] px-6 rounded-[5px] text-white font-bold hover:bg-red-700 transition-colors flex items-center justify-center"
-                style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '12px' }}
+                style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '14px' }}
               >
                 Hapus
               </button>
@@ -566,6 +636,12 @@ export default function PengaturanPage() {
           </div>
         </div>
       )}
+
+      {/* Profil Modal */}
+      <ProfilModal
+        isOpen={isProfilModalOpen}
+        onClose={() => setIsProfilModalOpen(false)}
+      />
     </div>
   );
 }

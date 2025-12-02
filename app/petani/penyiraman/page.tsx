@@ -6,6 +6,7 @@ import Image from "next/image";
 import PetaniSidebar from "@/app/components/PetaniSidebar";
 import PetaniHeader from "@/app/components/PetaniHeader";
 import { supabase } from "@/utils/supabaseClient";
+import { predictStatus } from "@/utils/predict";
 
 const imgIconamoonEditLight = "https://www.figma.com/api/mcp/asset/7ef1400b-7fe8-4421-b795-dfbf2055ae76";
 const imgMaterialSymbolsDeleteRounded = "https://www.figma.com/api/mcp/asset/3a755e67-d3d6-4f8d-82c3-815abf7e841a";
@@ -17,6 +18,7 @@ interface WateringRecord {
   suhu: number;
   kelembapan: number;
   status: "Kering" | "Normal" | "Basah";
+  mlPrediction?: string | null;
 }
 
 export default function PenyiramanPage() {
@@ -33,6 +35,40 @@ export default function PenyiramanPage() {
   useEffect(() => {
     loadRecords();
   }, [currentPage]);
+
+  const loadMLPredictions = async (records: WateringRecord[]) => {
+    // Load prediksi ML untuk semua records secara parallel
+    const predictionPromises = records.map(async (record) => {
+      try {
+        // Ambil jam dari waktu untuk prediksi ML
+        let hour = new Date().getHours(); // Default: jam saat ini
+        if (record.waktu) {
+          const timeMatch = record.waktu.match(/(\d{1,2})[.:](\d{2})/);
+          if (timeMatch) {
+            hour = parseInt(timeMatch[1]);
+          }
+        }
+        
+        const prediction = await predictStatus(record.suhu, record.kelembapan, hour);
+        return { id: record.id, prediction };
+      } catch (error) {
+        console.error(`Error getting ML prediction for record ${record.id}:`, error);
+        return { id: record.id, prediction: null };
+      }
+    });
+
+    try {
+      const results = await Promise.all(predictionPromises);
+      
+      // Update records dengan prediksi ML
+      setRecords(prev => prev.map(record => {
+        const result = results.find(r => r.id === record.id);
+        return result ? { ...record, mlPrediction: result.prediction } : record;
+      }));
+    } catch (error) {
+      console.error("Error loading ML predictions:", error);
+    }
+  };
 
   const loadRecords = async () => {
     try {
@@ -110,7 +146,7 @@ export default function PenyiramanPage() {
       if (data && data.length > 0) {
         console.log("Raw data from Supabase:", data);
         // Map data dari Supabase
-        setRecords(data.map((item: any, index: number) => {
+        const mappedRecords = data.map((item: any, index: number) => {
           console.log("Processing item:", item);
           console.log("Item ID:", item.id, item.Id, item.ID);
           
@@ -188,10 +224,17 @@ export default function PenyiramanPage() {
             suhu: suhuValue,
             kelembapan: kelembapanValue,
             status,
+            mlPrediction: null,
           };
+          
           console.log("Mapped record:", record);
           return record;
-        }));
+        });
+        
+        setRecords(mappedRecords);
+        
+        // Load ML predictions untuk semua records setelah data dimuat
+        loadMLPredictions(mappedRecords);
       } else {
         // Jika tidak ada data, tampilkan array kosong
         console.log("No data found");
@@ -416,7 +459,7 @@ export default function PenyiramanPage() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "Kering":
-        return "#ba0b0b";
+        return "#dc2626";
       case "Normal":
         return "#106113";
       case "Basah":
@@ -427,19 +470,19 @@ export default function PenyiramanPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex">
+    <div className="min-h-screen bg-[#fef7f5] flex">
       {/* Sidebar */}
       <PetaniSidebar />
 
       {/* Main Content */}
-      <div className="flex-3 ml-[200px] min-h-screen">
+      <div className="flex-1 ml-[200px] min-h-screen bg-[#fef7f5]" style={{ minHeight: '100vh', width: 'calc(100% - 180px)', paddingBottom: '40px' }}>
         <div className="p-8" style={{ paddingLeft: '10px' }}>
           {/* Header */}
           <div className="mb-8">
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
-                <h1 className="font-bold text-2xl text-black">Penyiraman</h1>
-                <p className="text-xs text-black mt-1">Penyiraman</p>
+                <h1 className="font-bold text-3xl text-black">Penyiraman</h1>
+                <p className="text-sm text-black mt-1">Penyiraman</p>
               </div>
               <div className="flex-shrink-0">
                 <PetaniHeader />
@@ -473,47 +516,50 @@ export default function PenyiramanPage() {
           </div>
 
           {/* Table */}
-          <div className="bg-white rounded-[10px] overflow-hidden" style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}>
+          <div className="rounded-[15px] overflow-hidden shadow-lg" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)', fontFamily: 'Arial, Helvetica, sans-serif' }}>
             <div className="overflow-x-auto">
               <table className="w-full">
               {/* Table Header */}
               <thead>
                 <tr className="bg-[#eed2e1] h-[40px]">
-                  <th className="px-4 text-center font-bold text-[#181818] w-[62px]" style={{ fontSize: '12px' }}>
+                  <th className="px-4 text-center font-bold text-[#181818] w-[62px]" style={{ fontSize: '14px' }}>
                     No
                   </th>
-                  <th className="px-4 text-center font-bold text-[#181818] min-w-[146px]" style={{ fontSize: '12px' }}>
+                  <th className="px-4 text-center font-bold text-[#181818] min-w-[146px]" style={{ fontSize: '14px' }}>
                     Tanggal
                   </th>
-                  <th className="px-4 text-center font-bold text-[#181818] min-w-[146px]" style={{ fontSize: '12px' }}>
+                  <th className="px-4 text-center font-bold text-[#181818] min-w-[146px]" style={{ fontSize: '14px' }}>
                     Waktu
                   </th>
-                  <th className="px-4 text-center font-bold text-[#181818] min-w-[146px]" style={{ fontSize: '12px' }}>
+                  <th className="px-4 text-center font-bold text-[#181818] min-w-[146px]" style={{ fontSize: '14px' }}>
                     Suhu
                   </th>
-                  <th className="px-4 text-center font-bold text-[#181818] min-w-[146px]" style={{ fontSize: '12px' }}>
+                  <th className="px-4 text-center font-bold text-[#181818] min-w-[146px]" style={{ fontSize: '14px' }}>
                     Kelembapan
                   </th>
-                  <th className="px-4 text-center font-bold text-[#181818] w-[100px]" style={{ fontSize: '12px' }}>
+                  <th className="px-4 text-center font-bold text-[#181818] w-[100px]" style={{ fontSize: '14px' }}>
                     Status
                   </th>
-                  <th className="px-4 text-center font-bold text-[#181818] min-w-[190px]" style={{ fontSize: '12px' }}>
+                  <th className="px-4 text-center font-bold text-[#181818] w-[120px]" style={{ fontSize: '14px' }}>
+                    Prediksi ML
+                  </th>
+                  <th className="px-4 text-center font-bold text-[#181818] min-w-[190px]" style={{ fontSize: '14px' }}>
                     Aksi
                   </th>
                 </tr>
               </thead>
 
               {/* Table Body */}
-              <tbody className="bg-white">
+              <tbody style={{ background: 'linear-gradient(to bottom, #ffffff 0%, #faf8fb 100%)' }}>
                 {isLoading ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500" style={{ fontSize: '10px' }}>
+                    <td colSpan={8} className="px-4 py-8 text-center text-gray-500" style={{ fontSize: '12px' }}>
                       Memuat data...
                     </td>
                   </tr>
                 ) : records.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500" style={{ fontSize: '12px' }}>
+                    <td colSpan={8} className="px-4 py-8 text-center text-gray-500" style={{ fontSize: '12px' }}>
                       Tidak ada data
                     </td>
                   </tr>
@@ -521,22 +567,31 @@ export default function PenyiramanPage() {
                   records.map((record, index) => (
                     <tr
                       key={record.id}
-                      className="h-[50px] border-b border-gray-200 last:border-b-0 hover:bg-gray-50 transition"
+                      className="h-[50px] border-b border-[#9e1c60]/15 last:border-b-0 transition"
+                      style={{ 
+                        background: 'linear-gradient(to bottom, #ffffff 0%, #faf8fb 100%)',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'linear-gradient(to bottom, #faf5f8 0%, #f5e8f0 100%)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'linear-gradient(to bottom, #ffffff 0%, #faf8fb 100%)';
+                      }}
                     >
                       <td className="px-4 text-center">
-                        <p className="text-[#181818]" style={{ fontSize: '10px' }}>{(currentPage - 1) * itemsPerPage + index + 1}</p>
+                        <p className="text-[#181818]" style={{ fontSize: '12px' }}>{(currentPage - 1) * itemsPerPage + index + 1}</p>
                       </td>
                       <td className="px-4 text-center">
-                        <p className="text-[#181818]" style={{ fontSize: '10px' }}>{record.tanggal}</p>
+                        <p className="text-[#181818]" style={{ fontSize: '12px' }}>{record.tanggal}</p>
                       </td>
                       <td className="px-4 text-center">
-                        <p className="text-[#181818]" style={{ fontSize: '10px' }}>{record.waktu}</p>
+                        <p className="text-[#181818]" style={{ fontSize: '12px' }}>{record.waktu}</p>
                       </td>
                       <td className="px-4 text-center">
-                        <p className="text-[#181818]" style={{ fontSize: '10px' }}>{record.suhu}°</p>
+                        <p className="text-[#181818]" style={{ fontSize: '12px' }}>{record.suhu}°</p>
                       </td>
                       <td className="px-4 text-center">
-                        <p className="text-[#181818]" style={{ fontSize: '10px' }}>{record.kelembapan}%</p>
+                        <p className="text-[#181818]" style={{ fontSize: '12px' }}>{record.kelembapan}%</p>
                       </td>
                       <td className="px-4 text-center">
                         <div className="flex items-center justify-center">
@@ -544,11 +599,29 @@ export default function PenyiramanPage() {
                             className="rounded-[10px] px-4 py-1 h-[24px] min-w-[72px] flex items-center justify-center"
                             style={{ backgroundColor: getStatusColor(record.status) }}
                           >
-                            <p className="font-bold text-white text-center" style={{ fontSize: '10px' }}>
+                            <p className="font-bold text-white text-center" style={{ fontSize: '12px' }}>
                               {record.status}
                             </p>
                           </div>
                         </div>
+                      </td>
+                      <td className="px-4 text-center">
+                        {record.mlPrediction ? (
+                          <div className="flex items-center justify-center">
+                            <div
+                              className="rounded-[10px] px-3 py-1 h-[24px] min-w-[72px] flex items-center justify-center"
+                              style={{ backgroundColor: getStatusColor(record.mlPrediction) }}
+                            >
+                              <p className="font-bold text-white text-center" style={{ fontSize: '11px' }}>
+                                {record.mlPrediction}
+                              </p>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-gray-400 text-center" style={{ fontSize: '11px' }}>
+                            Loading...
+                          </p>
+                        )}
                       </td>
                       <td className="px-4">
                         <div className="flex items-center justify-center gap-[7px]">
@@ -572,14 +645,9 @@ export default function PenyiramanPage() {
                             className="w-5 h-5 flex items-center justify-center hover:opacity-70 transition cursor-pointer"
                             title="Delete"
                           >
-                            <Image
-                              src={imgMaterialSymbolsDeleteRounded}
-                              alt="Delete"
-                              width={20}
-                              height={20}
-                              className="object-contain"
-                              unoptimized
-                            />
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <path d="M6 19C6 20.1 6.9 21 8 21H16C17.1 21 18 20.1 18 19V7H6V19ZM19 4H15.5L14.5 3H9.5L8.5 4H5V6H19V4Z" fill="#dc2626"/>
+                            </svg>
                           </button>
                         </div>
                       </td>
@@ -661,12 +729,12 @@ export default function PenyiramanPage() {
                   }}
                   className="w-12 px-2 py-1 rounded-[5px] border border-gray-300 text-center text-[12px] focus:outline-none focus:border-[#9e1c60]"
                   placeholder="..."
-                  style={{ fontSize: '12px' }}
+                  style={{ fontSize: '14px' }}
                 />
                 <button
                   onClick={handleJumpToPage}
-                  className="px-2 py-1 rounded-[5px] border border-[#9e1c60] text-[#9e1c60] hover:bg-[#9e1c60] hover:text-white transition text-[12px]"
-                  style={{ fontSize: '12px' }}
+                  className="px-2 py-1 rounded-[5px] border-2 border-[#9e1c60] text-[#9e1c60] hover:bg-[#9e1c60] hover:text-white transition text-[12px]"
+                  style={{ fontSize: '14px' }}
                 >
                   Masuk
                 </button>
@@ -679,16 +747,17 @@ export default function PenyiramanPage() {
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
         <div 
-          className="fixed inset-0 flex items-center justify-center z-50"
+          className="fixed inset-0 flex items-center justify-center z-50 py-8"
           onClick={handleDeleteCancel}
           style={{ 
             animation: 'fadeIn 0.2s ease-in-out',
             fontFamily: 'Arial, Helvetica, sans-serif',
-            backgroundColor: 'rgba(255, 255, 255, 0.1)'
+            backgroundColor: 'rgba(255, 255, 255, 0.5)'
           }}
         >
           <div 
-            className="bg-white rounded-[20px] p-8 max-w-sm w-full mx-4 shadow-2xl border-2 border-[#9e1c60]"
+            className="rounded-[15px] p-8 max-w-sm w-full mx-4 relative shadow-2xl"
+            style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}
             onClick={(e) => e.stopPropagation()}
             style={{ 
               animation: 'slideUp 0.3s ease-out',
@@ -704,7 +773,7 @@ export default function PenyiramanPage() {
             
             {/* Message */}
             <div className="text-center mb-8">
-              <p className="text-[#181818] text-base font-normal leading-relaxed" style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}>
+              <p className="text-[#181818] text-lg font-normal leading-relaxed" style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}>
                 Anda yakin ingin menghapus riwayat tersebut?
               </p>
             </div>
@@ -713,17 +782,17 @@ export default function PenyiramanPage() {
             <div className="flex gap-3">
               <button
                 onClick={handleDeleteCancel}
-                className="flex-1 py-3 rounded-[10px] bg-[#ff9500] text-white hover:bg-[#e68500] active:bg-[#cc7500] transition-all duration-200 font-semibold"
-                style={{ fontSize: '14px', fontFamily: 'Arial, Helvetica, sans-serif' }}
+                className="flex-1 py-3 rounded-[10px] bg-[#ff9500] text-white hover:bg-[#e68500] transition font-semibold"
+                style={{ fontSize: '16px', fontFamily: 'Arial, Helvetica, sans-serif' }}
               >
-                Tidak
+                Batal
               </button>
               <button
                 onClick={handleDeleteConfirm}
-                className="flex-1 py-3 rounded-[10px] bg-[#106113] text-white hover:bg-[#0d4f0f] active:bg-[#0a3d0c] transition-all duration-200 font-semibold"
-                style={{ fontSize: '14px', fontFamily: 'Arial, Helvetica, sans-serif' }}
+                className="flex-1 py-3 rounded-[10px] bg-[#dc2626] text-white hover:bg-[#b91c1c] transition font-semibold"
+                style={{ fontSize: '16px', fontFamily: 'Arial, Helvetica, sans-serif' }}
               >
-                Ya
+                Hapus
               </button>
             </div>
           </div>

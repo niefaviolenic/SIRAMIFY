@@ -19,6 +19,8 @@ export default function DaftarPage() {
   const [isAccountTypeOpen, setIsAccountTypeOpen] = useState(false);
   const [selectedAccountType, setSelectedAccountType] = useState("Pilih Jenis Akun");
   const [isLoading, setIsLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
@@ -30,83 +32,210 @@ export default function DaftarPage() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setErrorMessage("");
+    setSuccessMessage("");
     
     if (selectedAccountType === "Pilih Jenis Akun") {
-      alert("Pilih jenis akun terlebih dahulu!");
+      setErrorMessage("Pilih jenis akun terlebih dahulu!");
       return;
     }
 
     if (formData.password !== formData.confirmPassword) {
-      alert("Password dan Konfirmasi Password tidak sama!");
+      setErrorMessage("Password dan Konfirmasi Password tidak sama!");
       return;
     }
 
     if (formData.password.length < 6) {
-      alert("Password minimal 6 karakter!");
+      setErrorMessage("Password minimal 6 karakter!");
       return;
     }
 
     setIsLoading(true);
     try {
-      // Register user dengan Supabase
+      const role = selectedAccountType.toLowerCase();
+      
+      // Validasi email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email.trim())) {
+        setErrorMessage("Format email tidak valid!");
+        setIsLoading(false);
+        return;
+      }
+
+      console.log("Starting registration for:", formData.email.trim(), "with role:", role);
+
+      // Register user dengan Supabase (otomatis masuk ke auth.users)
+      // Disable email confirmation untuk langsung bisa login
       const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email,
+        email: formData.email.trim().toLowerCase(), // Normalize email
         password: formData.password,
         options: {
           data: {
             full_name: formData.fullName,
-            role: selectedAccountType.toLowerCase(),
+            role: role,
           },
+          emailRedirectTo: undefined, // Tidak perlu redirect email
         },
       });
 
-      if (authError) throw authError;
+      if (authError) {
+        console.error("Auth signup error:", authError);
+        console.error("Auth error details:", JSON.stringify(authError, null, 2));
+        
+        // Handle specific error messages
+        let errorMsg = authError.message || "Gagal mendaftar. Silakan coba lagi.";
+        
+        if (authError.message?.includes("Database error")) {
+          errorMsg = "Terjadi kesalahan pada database. Silakan coba lagi atau hubungi administrator.";
+        } else if (authError.message?.includes("User already registered")) {
+          errorMsg = "Email sudah terdaftar. Silakan gunakan email lain atau login.";
+        } else if (authError.message?.includes("Password")) {
+          errorMsg = "Password tidak valid. Pastikan password minimal 6 karakter.";
+        }
+        
+        setErrorMessage(errorMsg);
+        setIsLoading(false);
+        return;
+      }
 
-      // Simpan data user ke tabel users (jika ada)
-      if (authData.user) {
-        const { error: profileError } = await supabase
+      if (!authData.user) {
+        setErrorMessage("User tidak berhasil dibuat. Silakan coba lagi.");
+        setIsLoading(false);
+        return;
+      }
+
+      console.log("User created in auth.users:", authData.user.id);
+      console.log("User email:", authData.user.email);
+      console.log("User metadata:", authData.user.user_metadata);
+
+      // Simpan data user ke tabel users (langsung setelah signup)
+      // Tunggu sebentar untuk memastikan auth.users sudah tersimpan
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      const normalizedEmail = formData.email.trim().toLowerCase();
+      const insertData = {
+        id: authData.user.id,
+        email: normalizedEmail,
+        full_name: formData.fullName.trim(),
+        role: role,
+        status: "active",
+      };
+      
+      console.log("Attempting to insert user data:", insertData);
+      
+      // Deklarasi variabel di scope yang benar
+      let userCreated = false;
+      let lastError: any = null;
+      
+      // Cek dulu apakah user sudah ada (mungkin dari trigger)
+      const { data: existingUser } = await supabase
+        .from("users")
+        .select("id, role, status")
+        .eq("id", authData.user.id)
+        .single();
+      
+      if (existingUser) {
+        console.log("✅ User already exists in users table (probably from trigger):", existingUser);
+        // User sudah ada, skip insert
+        userCreated = true;
+      } else {
+        console.log("⚠️ User not found in users table, attempting to create...");
+        
+        // Coba insert dengan berbagai cara
+        // Method 1: Direct insert
+        const { data: userData, error: profileError } = await supabase
           .from("users")
-          .insert({
-            id: authData.user.id,
-            email: formData.email,
-            full_name: formData.fullName,
-            role: selectedAccountType.toLowerCase(),
-          });
+          .insert(insertData)
+          .select()
+          .single();
 
         if (profileError) {
-          console.error("Error creating profile:", profileError);
+          console.error("Direct insert failed:", profileError);
+          console.error("Error details:", JSON.stringify(profileError, null, 2));
+          console.error("Error code:", profileError.code);
+          console.error("Error message:", profileError.message);
+          lastError = profileError;
+          
+          // Method 2: Upsert
+          const { data: upsertData, error: upsertError } = await supabase
+            .from("users")
+            .upsert(insertData, {
+              onConflict: 'id'
+            })
+            .select()
+            .single();
+
+          if (upsertError) {
+            console.error("Upsert also failed:", upsertError);
+            console.error("Upsert error details:", JSON.stringify(upsertError, null, 2));
+            console.error("Upsert error code:", upsertError.code);
+            console.error("Upsert error message:", upsertError.message);
+            lastError = upsertError;
+            
+            // Method 3: Try without select (sometimes select causes issues)
+            const { error: simpleInsertError } = await supabase
+              .from("users")
+              .insert(insertData);
+
+            if (simpleInsertError) {
+              console.error("Simple insert also failed:", simpleInsertError);
+              console.error("Simple insert error details:", JSON.stringify(simpleInsertError, null, 2));
+              console.error("Simple insert error code:", simpleInsertError.code);
+              console.error("Simple insert error message:", simpleInsertError.message);
+              lastError = simpleInsertError;
+            } else {
+              console.log("✅ User created via simple insert (no select)");
+              userCreated = true;
+              
+              // Verify dengan select terpisah
+              const { data: verifyData } = await supabase
+                .from("users")
+                .select("*")
+                .eq("id", authData.user.id)
+                .single();
+              console.log("Verified user data:", verifyData);
+            }
+          } else {
+            console.log("✅ User profile created via upsert:", upsertData);
+            userCreated = true;
+          }
+        } else {
+          console.log("✅ User profile created successfully:", userData);
+          userCreated = true;
         }
       }
 
-      alert("Pendaftaran berhasil! Silakan cek email Anda untuk verifikasi, kemudian login.");
-      router.push("/masuk");
+      // Final verification
+      if (userCreated) {
+        const { data: finalCheck } = await supabase
+          .from("users")
+          .select("*")
+          .eq("id", authData.user.id)
+          .single();
+        
+        if (finalCheck) {
+          console.log("✅ User confirmed in users table:", finalCheck);
+        } else {
+          console.warn("⚠️ User created but verification failed");
+        }
+      } else {
+        console.error("❌ Failed to create user in users table. Last error:", lastError);
+        console.error("Last error details:", JSON.stringify(lastError, null, 2));
+        // Tetap lanjutkan, akan dibuat saat login
+        console.log("⚠️ Will create user profile during login instead");
+      }
+
+      // Tampilkan success message di halaman (tanpa alert)
+      setSuccessMessage("Pendaftaran berhasil! Mengarahkan ke halaman masuk...");
+      
+      // Auto redirect ke halaman masuk setelah 1.5 detik (tanpa perlu klik OK)
+      setTimeout(() => {
+        router.push("/masuk");
+      }, 1500);
     } catch (error: any) {
       console.error("Registration error:", error);
-      alert(error.message || "Terjadi kesalahan saat mendaftar. Silakan coba lagi.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleGoogleRegister = async () => {
-    if (selectedAccountType === "Pilih Jenis Akun") {
-      alert("Pilih jenis akun terlebih dahulu!");
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback?role=${selectedAccountType.toLowerCase()}`,
-        },
-      });
-
-      if (error) throw error;
-    } catch (error: any) {
-      console.error("Google registration error:", error);
-      alert(error.message || "Terjadi kesalahan saat mendaftar dengan Google. Silakan coba lagi.");
+      const errMsg = error?.message || "Terjadi kesalahan saat mendaftar. Silakan coba lagi.";
+      setErrorMessage(errMsg);
       setIsLoading(false);
     }
   };
@@ -139,6 +268,20 @@ export default function DaftarPage() {
             <h2 className="font-bold text-base md:text-lg text-[#561530] mb-3 md:mb-4">
               Daftar
             </h2>
+
+            {/* Success Message */}
+            {successMessage && (
+              <div className="mb-3 p-3 bg-green-100 border border-green-400 text-green-700 rounded-[10px] text-xs">
+                {successMessage}
+              </div>
+            )}
+
+            {/* Error Message */}
+            {errorMessage && (
+              <div className="mb-3 p-3 bg-red-100 border border-red-400 text-red-700 rounded-[10px] text-xs">
+                {errorMessage}
+              </div>
+            )}
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-2.5 md:gap-3">
               {/* Full Name Field */}
@@ -302,29 +445,6 @@ export default function DaftarPage() {
                 {isLoading ? "Mendaftar..." : "Daftar"}
               </button>
             </form>
-
-            {/* Divider */}
-            <div className="flex items-center gap-2.5 my-3 md:my-4">
-              <div className="flex-1 h-px bg-black/20"></div>
-              <span className="text-xs text-black/50">atau</span>
-              <div className="flex-1 h-px bg-black/20"></div>
-            </div>
-
-            {/* Google Register Button */}
-            <button
-              type="button"
-              onClick={handleGoogleRegister}
-              disabled={isLoading}
-              className="w-full bg-white hover:bg-gray-50 transition border-2 border-black/20 rounded-[10px] py-2 md:py-2.5 px-3 md:px-4 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-              </svg>
-              <span className="font-medium text-xs text-black">Daftar dengan Google</span>
-            </button>
 
             {/* Login Link */}
             <p className="text-center mt-3 md:mt-4 text-xs text-[#561530]">

@@ -29,10 +29,15 @@
   }
 }
 
-body {
-  background: var(--background);
+html, body {
+  background: #fef7f5;
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  min-height: 100vh;
+}
+
+body {
+  background: #fef7f5;
 }
 
 @keyframes fadeIn {

@@ -390,7 +390,7 @@ export default function ManajemenProdukPage() {
                         <td className="px-4 py-3 text-sm text-black">{product.stok}</td>
                         <td className="px-4 py-3">
                           <span
-                            className="px-3 py-1 rounded-full text-xs font-bold text-white"
+                            className="px-3 py-1 rounded-[10px] h-[24px] flex items-center justify-center text-xs font-bold text-white"
                             style={{ backgroundColor: getStatusColor(product.status) }}
                           >
                             {product.status}
