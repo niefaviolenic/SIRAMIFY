@@ -51,7 +51,7 @@ export default function EditPenyiramanPage() {
 
       // Coba dengan 'id' (lowercase - default Supabase)
       const result1 = await supabase
-        .from("monitoring")
+        .from("penyiraman")
         .select("*")
         .eq("id", id)
         .single();
@@ -63,7 +63,7 @@ export default function EditPenyiramanPage() {
       } else {
         // Coba dengan 'Id' (PascalCase)
         const result2 = await supabase
-          .from("monitoring")
+          .from("penyiraman")
           .select("*")
           .eq("Id", id)
           .single();
@@ -75,7 +75,7 @@ export default function EditPenyiramanPage() {
         } else {
           // Coba dengan 'ID' (uppercase)
           const result3 = await supabase
-          .from("monitoring")
+          .from("penyiraman")
           .select("*")
           .eq("ID", id)
           .single();
@@ -109,44 +109,67 @@ export default function EditPenyiramanPage() {
       console.log("Data berhasil dimuat:", data);
 
       if (data) {
-        // Format tanggal
+        // Format tanggal dan waktu dari kolom Tanggal
         const tanggalValue = data.Tanggal || data.tanggal || data.TANGGAL;
-        const date = tanggalValue ? new Date(tanggalValue) : (data.created_at ? new Date(data.created_at) : new Date());
-        const tanggal = date.toLocaleDateString("en-US", {
-          month: "2-digit",
-          day: "2-digit",
-          year: "2-digit",
-        });
-
-        // Format waktu - sama seperti di halaman penyiraman
-        // Karena waktu diisi manual, ambil dari created_at
+        
+        let tanggal = "";
         let waktu = "";
         
-        // Prioritas: kolom Waktu jika ada, jika tidak gunakan created_at
-        if (data.Waktu || data.waktu || data.WAKTU) {
-          waktu = String(data.Waktu || data.waktu || data.WAKTU).trim();
-          // Jika format waktu menggunakan titik (12.00), ubah ke titik dua (12:00) untuk input
-          if (waktu.includes('.')) {
-            waktu = waktu.replace(/\./g, ':');
-          }
-        } else if (data.created_at) {
-          // Gunakan waktu dari created_at (sama seperti di halaman penyiraman)
-          try {
-            const timeDate = new Date(data.created_at);
-            if (!isNaN(timeDate.getTime())) {
-              // Gunakan format id-ID seperti di halaman penyiraman, lalu ubah titik jadi titik dua
-              waktu = timeDate.toLocaleTimeString("id-ID", {
-                hour: "2-digit",
-                minute: "2-digit",
-              });
-              // Ubah format dari "12.00" menjadi "12:00" untuk input
-              if (waktu.includes('.')) {
-                waktu = waktu.replace(/\./g, ':');
-              }
+        if (tanggalValue) {
+          // Parse format "DD/MM/YYYY HH:MM"
+          const parts = tanggalValue.toString().trim().split(" ");
+          if (parts.length >= 2) {
+            const datePart = parts[0]; // "06/02/2022"
+            const timePart = parts[1]; // "01:25"
+            
+            // Parse tanggal (format DD/MM/YYYY) ke MM/DD/YY untuk input
+            const dateParts = datePart.split("/");
+            if (dateParts.length === 3) {
+              const day = dateParts[0];
+              const month = dateParts[1];
+              const year = dateParts[2].slice(-2); // Ambil 2 digit terakhir tahun
+              tanggal = `${month}/${day}/${year}`;
             }
-          } catch (e) {
-            console.error("Error parsing waktu:", e);
+            
+            // Parse waktu (format HH:MM)
+            if (timePart) {
+              waktu = timePart; // Sudah dalam format HH:MM
+            }
+          } else {
+            // Hanya tanggal saja
+            try {
+              const date = new Date(tanggalValue);
+              if (!isNaN(date.getTime())) {
+                tanggal = date.toLocaleDateString("en-US", {
+                  month: "2-digit",
+                  day: "2-digit",
+                  year: "2-digit",
+                });
+              }
+            } catch (e) {
+              tanggal = "";
+            }
           }
+        }
+        
+        // Fallback: cek kolom Waktu terpisah jika ada
+        if (!waktu) {
+          if (data.Waktu || data.waktu || data.WAKTU) {
+            waktu = String(data.Waktu || data.waktu || data.WAKTU).trim();
+            // Jika format waktu menggunakan titik (12.00), ubah ke titik dua (12:00) untuk input
+            if (waktu.includes('.')) {
+              waktu = waktu.replace(/\./g, ':');
+            }
+          }
+        }
+        
+        // Default jika masih kosong
+        if (!tanggal) {
+          tanggal = new Date().toLocaleDateString("en-US", {
+            month: "2-digit",
+            day: "2-digit",
+            year: "2-digit",
+          });
         }
 
         // Tentukan status
@@ -223,7 +246,7 @@ export default function EditPenyiramanPage() {
       };
 
       const { error } = await supabase
-        .from("monitoring")
+        .from("penyiraman")
         .update(updateData)
         .eq("id", id);
 
@@ -244,7 +267,7 @@ export default function EditPenyiramanPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex">
+    <div className="min-h-screen bg-[#fef7f5] flex">
       {/* Sidebar */}
       <PetaniSidebar />
 
@@ -255,8 +278,8 @@ export default function EditPenyiramanPage() {
           <div className="mb-8">
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
-                <h1 className="font-bold text-2xl text-black">Edit Data Penyiraman</h1>
-                <p className="text-xs text-black mt-1">Penyiraman/Edit Data Penyiraman</p>
+                <h1 className="font-bold text-3xl text-black">Edit Data Penyiraman</h1>
+                <p className="text-sm text-black mt-1">Penyiraman/Edit Data Penyiraman</p>
               </div>
               <div className="flex-shrink-0">
                 <PetaniHeader />
@@ -275,7 +298,7 @@ export default function EditPenyiramanPage() {
                 {/* Row 1: Tanggal & Waktu */}
                 <div className="flex gap-6">
                   <div className="flex flex-col gap-[11px] flex-1">
-                    <label className="font-bold text-black" style={{ fontSize: '12px' }}>
+                    <label className="font-bold text-black" style={{ fontSize: '14px' }}>
                       Tanggal Penyiraman
                     </label>
                     <input
@@ -284,12 +307,12 @@ export default function EditPenyiramanPage() {
                       onChange={(e) => setFormData({ ...formData, tanggal: e.target.value })}
                       placeholder="mm/dd/yy"
                       className={`bg-[#f5f5f5] h-[35px] px-3 py-2 rounded-[5px] outline-none focus:ring-2 focus:ring-[#9e1c60] ${formData.tanggal ? 'text-black' : 'text-black/50'}`}
-                      style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '10px' }}
+                      style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '14px' }}
                       required
                     />
                   </div>
                   <div className="flex flex-col gap-[11px] flex-1">
-                    <label className="font-bold text-black" style={{ fontSize: '12px' }}>
+                    <label className="font-bold text-black" style={{ fontSize: '14px' }}>
                       Waktu Penyiraman
                     </label>
                     <input
@@ -298,7 +321,7 @@ export default function EditPenyiramanPage() {
                       onChange={(e) => setFormData({ ...formData, waktu: e.target.value })}
                       placeholder="12:00"
                       className={`bg-[#f5f5f5] h-[35px] px-3 py-2 rounded-[5px] outline-none focus:ring-2 focus:ring-[#9e1c60] ${formData.waktu && formData.waktu.trim() !== "" ? 'text-black' : 'text-black/50'}`}
-                      style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '10px' }}
+                      style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '14px' }}
                       required
                     />
                   </div>
@@ -307,7 +330,7 @@ export default function EditPenyiramanPage() {
                 {/* Row 2: Suhu & Kelembapan */}
                 <div className="flex gap-6">
                   <div className="flex flex-col gap-[11px] flex-1">
-                    <label className="font-bold text-black" style={{ fontSize: '12px' }}>
+                    <label className="font-bold text-black" style={{ fontSize: '14px' }}>
                       Suhu
                     </label>
                     <input
@@ -316,12 +339,12 @@ export default function EditPenyiramanPage() {
                       onChange={(e) => setFormData({ ...formData, suhu: e.target.value })}
                       placeholder="26.5°"
                       className={`bg-[#f5f5f5] h-[35px] px-3 py-2 rounded-[5px] outline-none focus:ring-2 focus:ring-[#9e1c60] ${formData.suhu ? 'text-black' : 'text-black/50'}`}
-                      style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '10px' }}
+                      style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '14px' }}
                       required
                     />
                   </div>
                   <div className="flex flex-col gap-[11px] flex-1">
-                    <label className="font-bold text-black" style={{ fontSize: '12px' }}>
+                    <label className="font-bold text-black" style={{ fontSize: '14px' }}>
                       Kelembapan
                     </label>
                     <input
@@ -330,7 +353,7 @@ export default function EditPenyiramanPage() {
                       onChange={(e) => setFormData({ ...formData, kelembapan: e.target.value })}
                       placeholder="53%"
                       className={`bg-[#f5f5f5] h-[35px] px-3 py-2 rounded-[5px] outline-none focus:ring-2 focus:ring-[#9e1c60] ${formData.kelembapan ? 'text-black' : 'text-black/50'}`}
-                      style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '10px' }}
+                      style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '14px' }}
                       required
                     />
                   </div>
@@ -350,7 +373,7 @@ export default function EditPenyiramanPage() {
                       className={`bg-[#f5f5f5] h-[35px] px-3 py-2 pr-8 rounded-[5px] border-0 outline-none focus:ring-2 focus:ring-inset focus:ring-[#9e1c60] appearance-none w-full ${formData.status ? 'text-black' : 'text-black/50'}`}
                       style={{ 
                         fontFamily: 'Arial, Helvetica, sans-serif', 
-                        fontSize: '10px'
+                        fontSize: '12px'
                       }}
                       required
                     >
@@ -382,7 +405,7 @@ export default function EditPenyiramanPage() {
                     type="submit"
                     disabled={isSaving}
                     className="bg-[#27a73d] h-[35px] rounded-[5px] text-white font-bold hover:bg-[#1f8a31] transition-colors disabled:opacity-50"
-                    style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '12px' }}
+                    style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '14px' }}
                   >
                     {isSaving ? "Menyimpan..." : "Simpan"}
                   </button>
@@ -390,7 +413,7 @@ export default function EditPenyiramanPage() {
                     type="button"
                     onClick={handleBack}
                     className="bg-[#e09028] h-[35px] rounded-[5px] text-white font-bold hover:bg-[#c77a1f] transition-colors"
-                    style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '12px' }}
+                    style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '14px' }}
                   >
                     Kembali
                   </button>

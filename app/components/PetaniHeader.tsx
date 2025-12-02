@@ -1,16 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import ProfilModal from "./ProfilModal";
+import { supabase } from "@/utils/supabaseClient";
 
-const imgMaterialSymbolsAccountCircle = "https://www.figma.com/api/mcp/asset/f1e7f691-81f0-46fc-a8e3-751cdb8564b1";
-const imgEllipse248 = "https://www.figma.com/api/mcp/asset/0424a7b7-23f5-467f-a8b2-b049141f61e0";
 const imgVector = "https://www.figma.com/api/mcp/asset/2d50e43c-8e6c-4cfe-8046-8ee95c01e548";
 const imgImage9 = "/profile.png";
 
 export default function PetaniHeader() {
   const [isProfilModalOpen, setIsProfilModalOpen] = useState(false);
+  const [profileImage, setProfileImage] = useState(imgImage9);
+
+  const fetchProfile = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from('users')
+          .select('photo_profile')
+          .eq('id', user.id)
+          .single();
+
+        if (profile?.photo_profile) {
+          setProfileImage(profile.photo_profile);
+        } else if (user.user_metadata?.avatar_url) {
+          setProfileImage(user.user_metadata.avatar_url);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching profile:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchProfile();
+  }, []);
 
   return (
     <div className="flex items-center justify-end gap-2">
@@ -29,44 +54,32 @@ export default function PetaniHeader() {
           <input
             type="text"
             placeholder="Cari"
-            className="w-full h-full outline-none text-[#9f9f9f] text-[10px] placeholder:text-[#9f9f9f] bg-transparent pl-3"
+            className="w-full h-full outline-none text-[#9f9f9f] text-sm placeholder:text-[#9f9f9f] bg-transparent pl-3"
             style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}
           />
         </div>
-        
-        {/* Account Circle Icon */}
+
+        {/* Profile Badge - Clickable */}
         <button
           onClick={() => setIsProfilModalOpen(true)}
-          className="flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+          className="relative w-[20px] h-[20px] rounded-full overflow-hidden flex-shrink-0 border border-white cursor-pointer hover:opacity-80 transition-opacity"
         >
           <Image
-            src={imgMaterialSymbolsAccountCircle}
-            alt="Account"
-            width={16}
-            height={16}
-            className="object-contain"
-            style={{ filter: 'brightness(0) invert(1)' }}
-            unoptimized
-          />
-        </button>
-        
-        {/* Profile Badge */}
-        <div className="relative w-[20px] h-[20px] rounded-full overflow-hidden flex-shrink-0 border border-white">
-          <Image
-            src={imgImage9}
+            src={profileImage}
             alt="Profile Badge"
             fill
             className="object-cover object-center"
             style={{ aspectRatio: '1/1', objectFit: 'cover', objectPosition: 'center' }}
             unoptimized
           />
-        </div>
+        </button>
       </div>
 
       {/* Profil Modal */}
       <ProfilModal
         isOpen={isProfilModalOpen}
         onClose={() => setIsProfilModalOpen(false)}
+        onUpdate={fetchProfile}
       />
     </div>
   );

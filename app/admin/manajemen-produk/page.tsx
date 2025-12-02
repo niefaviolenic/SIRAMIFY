@@ -67,15 +67,15 @@ export default function ManajemenProdukPage() {
         const errorCode = error.code || '';
         const errorKeys = Object.keys(error).length;
         const errorString = JSON.stringify(error);
-        
+
         // Check if error is empty or table not found
         const isEmptyError = errorKeys === 0 || errorString === '{}' || (!errorMessage && !errorCode);
-        const isTableNotFound = errorCode === 'PGRST116' || 
-                                errorMessage?.includes('does not exist') ||
-                                errorMessage?.includes('relation') ||
-                                errorMessage?.includes('not found') ||
-                                isEmptyError;
-        
+        const isTableNotFound = errorCode === 'PGRST116' ||
+          errorMessage?.includes('does not exist') ||
+          errorMessage?.includes('relation') ||
+          errorMessage?.includes('not found') ||
+          isEmptyError;
+
         if (isTableNotFound) {
           // Table doesn't exist yet, use mock data silently
           setProducts([
@@ -117,12 +117,12 @@ export default function ManajemenProdukPage() {
       }
 
       if (data) {
-        const mappedProducts = data.map((product: any) => ({
+        const mappedProducts: Product[] = data.map((product: any) => ({
           id: product.id,
           namaProduk: product.name || product.nama_produk || "",
           harga: `Rp${product.price || 0}`,
           stok: `${product.stock || 0}/${product.max_stock || 1000}`,
-          status: product.status === "habis" ? "Habis" : product.status === "stok_menipis" ? "Stok Menipis" : "Tersedia",
+          status: (product.status === "habis" ? "Habis" : product.status === "stok_menipis" ? "Stok Menipis" : "Tersedia") as "Tersedia" | "Stok Menipis" | "Habis",
           foto: product.image || product.foto || "",
           petani_id: product.petani_id,
           petani_name: product.petani?.full_name || product.petani?.email || "Unknown",
@@ -136,20 +136,20 @@ export default function ManajemenProdukPage() {
       const errorCode = error?.code || '';
       const errorKeys = error ? Object.keys(error).length : 0;
       const errorString = JSON.stringify(error || {});
-      
+
       // Check if error is empty or table not found
       const isEmptyError = errorKeys === 0 || errorString === '{}' || (!errorMessage && !errorCode);
-      const isTableNotFound = errorCode === 'PGRST116' || 
-                              errorMessage?.includes('does not exist') ||
-                              errorMessage?.includes('relation') ||
-                              errorMessage?.includes('not found') ||
-                              isEmptyError;
-      
+      const isTableNotFound = errorCode === 'PGRST116' ||
+        errorMessage?.includes('does not exist') ||
+        errorMessage?.includes('relation') ||
+        errorMessage?.includes('not found') ||
+        isEmptyError;
+
       // Only log error if it's a real error with meaningful message
       if (!isTableNotFound && errorMessage && errorKeys > 0) {
         console.error("Error loading products:", error);
       }
-      
+
       // Mock data
       setProducts([
         {
@@ -265,8 +265,8 @@ export default function ManajemenProdukPage() {
 
       if (error) throw error;
 
-      setProducts(products.map(p => 
-        p.id === selectedProduct.id 
+      setProducts(products.map(p =>
+        p.id === selectedProduct.id
           ? { ...p, ...editFormData, harga: `Rp${editFormData.harga}` }
           : p
       ));
@@ -390,7 +390,7 @@ export default function ManajemenProdukPage() {
                         <td className="px-4 py-3 text-sm text-black">{product.stok}</td>
                         <td className="px-4 py-3">
                           <span
-                            className="px-3 py-1 rounded-full text-xs font-bold text-white"
+                            className="px-3 py-1 rounded-[10px] h-[24px] flex items-center justify-center text-xs font-bold text-white"
                             style={{ backgroundColor: getStatusColor(product.status) }}
                           >
                             {product.status}

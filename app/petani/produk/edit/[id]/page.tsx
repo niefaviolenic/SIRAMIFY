@@ -5,37 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import PetaniSidebar from "@/app/components/PetaniSidebar";
 import PetaniHeader from "@/app/components/PetaniHeader";
 import Image from "next/image";
-
-// Mock data - akan diganti dengan fetch dari Supabase
-const mockProducts: { [key: string]: any } = {
-  "1": {
-    id: "1",
-    foto: "https://www.figma.com/api/mcp/asset/32b71d60-7912-4d47-9a8d-afbbe6983ef4",
-    namaProduk: "Benih Selada Merah",
-    harga: "7.000",
-    stok: 100,
-    stokMax: 1000,
-    deskripsi: "Benih selada merah berkualitas tinggi dengan daya tumbuh optimal. Cocok ditanam di pot maupun lahan, menghasilkan daun berwarna merah segar, renyah, dan kaya nutrisi. Ideal untuk salad, garnish, atau hidangan sehat sehari-hari."
-  },
-  "2": {
-    id: "2",
-    foto: "https://www.figma.com/api/mcp/asset/fb9b784c-60e8-46f5-9cd9-c464126ca6c8",
-    namaProduk: "Selada Oakloaf Merah",
-    harga: "32.000",
-    stok: 50,
-    stokMax: 1000,
-    deskripsi: "Selada oakloaf merah dengan kualitas premium."
-  },
-  "3": {
-    id: "3",
-    foto: "https://www.figma.com/api/mcp/asset/8c1614d4-747c-47ce-baf8-be35bd3ba6de",
-    namaProduk: "Pupuk Organik",
-    harga: "97.000",
-    stok: 0,
-    stokMax: 1000,
-    deskripsi: "Pupuk organik berkualitas tinggi untuk pertumbuhan tanaman optimal."
-  }
-};
+import { supabase } from "@/utils/supabaseClient";
 
 export default function EditProdukPage() {
   const router = useRouter();
@@ -50,8 +20,11 @@ export default function EditProdukPage() {
     deskripsi: ""
   });
   const [productImage, setProductImage] = useState("");
+  const [productImageFile, setProductImageFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     if (id) {
@@ -61,33 +34,81 @@ export default function EditProdukPage() {
 
   const loadData = async () => {
     try {
-      // TODO: Fetch from Supabase
-      // For now, using mock data
-      const product = mockProducts[id];
-      
-      if (!product) {
-        alert("Produk tidak ditemukan.");
-        router.push("/petani/produk");
+      setIsLoading(true);
+
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        router.push("/masuk");
         return;
       }
 
-      // Extract harga number from "Rp7.000" or "7.000"
-      let hargaNumber = product.harga.replace("Rp", "").replace(".", "").replace(",", "");
-      
+      // Fetch product dari Supabase
+      const { data, error } = await supabase
+        .from("produk")
+        .select("*")
+        .eq("id", id)
+        .eq("petani_id", user.id)
+        .single();
+
+      if (error) throw error;
+
+      if (!data) {
+        setErrorMessage("Produk tidak ditemukan.");
+        setTimeout(() => {
+          router.push("/petani/produk");
+        }, 2000);
+        return;
+      }
+
       setFormData({
-        nama: product.namaProduk || "",
-        harga: hargaNumber || "",
-        stok: product.stok || 0,
-        stokMax: product.stokMax || 1000,
-        deskripsi: product.deskripsi || ""
+        nama: data.nama || "",
+        harga: data.harga.toString() || "",
+        stok: data.stok || 0,
+        stokMax: data.stok_max || 1000,
+        deskripsi: data.deskripsi || ""
       });
-      setProductImage(product.foto || "");
-    } catch (error) {
+      setProductImage(data.foto || "");
+    } catch (error: any) {
       console.error("Error loading product:", error);
-      alert("Gagal memuat data produk. Silakan coba lagi.");
-      router.push("/petani/produk");
+      setErrorMessage("Gagal memuat data produk. Silakan coba lagi.");
+      setTimeout(() => {
+        router.push("/petani/produk");
+      }, 2000);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const uploadImageToStorage = async (file: File, userId: string): Promise<string | null> => {
+    try {
+      // Generate unique filename
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${userId}/${Date.now()}.${fileExt}`;
+      const filePath = `produk/${fileName}`;
+
+      // Upload file ke Supabase Storage
+      const { data, error } = await supabase.storage
+        .from('produk')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (error) {
+        console.error("Error uploading image:", error);
+        throw error;
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('produk')
+        .getPublicUrl(filePath);
+
+      return publicUrl;
+    } catch (error: any) {
+      console.error("Error uploading image to storage:", error);
+      throw error;
     }
   };
 
@@ -96,24 +117,53 @@ export default function EditProdukPage() {
     setIsSaving(true);
 
     try {
-      // TODO: Update in Supabase
-      // const { error } = await supabase
-      //   .from("produk")
-      //   .update({
-      //     nama: formData.nama,
-      //     harga: formData.harga,
-      //     stok: formData.stok,
-      //     stokMax: formData.stokMax,
-      //     deskripsi: formData.deskripsi
-      //   })
-      //   .eq("id", id);
-      // if (error) throw error;
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        router.push("/masuk");
+        return;
+      }
 
-      alert("Produk berhasil diperbarui!");
-      router.push("/petani/produk");
+      // Upload foto baru jika ada
+      let fotoUrl = productImage; // Default: gunakan foto yang sudah ada
+
+      if (productImageFile) {
+        try {
+          const uploadedUrl = await uploadImageToStorage(productImageFile, user.id);
+          if (uploadedUrl) {
+            fotoUrl = uploadedUrl;
+          }
+        } catch (error: any) {
+          console.error("Error uploading image:", error);
+          setErrorMessage("Gagal mengupload foto baru. Foto lama akan tetap digunakan.");
+          setTimeout(() => setErrorMessage(""), 5000);
+          // Lanjutkan dengan foto lama jika upload gagal
+        }
+      }
+
+      // Update di database
+      const { error } = await supabase
+        .from("produk")
+        .update({
+          nama: formData.nama,
+          harga: parseInt(formData.harga.replace(/\D/g, '') || '0'),
+          stok: formData.stok,
+          stok_max: formData.stokMax,
+          deskripsi: formData.deskripsi,
+          foto: fotoUrl
+        })
+        .eq("id", id)
+        .eq("petani_id", user.id); // Pastikan hanya pemilik yang bisa update
+
+      if (error) throw error;
+
+      setSuccessMessage("Produk berhasil diperbarui! Mengarahkan ke halaman produk...");
+      setTimeout(() => {
+        router.push("/petani/produk");
+      }, 1500);
     } catch (error: any) {
       console.error("Error updating product:", error);
-      alert("Gagal memperbarui produk. Silakan coba lagi.");
+      setErrorMessage("Gagal memperbarui produk. Silakan coba lagi.");
     } finally {
       setIsSaving(false);
     }
@@ -136,7 +186,7 @@ export default function EditProdukPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex">
+    <div className="min-h-screen bg-[#fef7f5] flex">
       {/* Sidebar */}
       <PetaniSidebar />
 
@@ -147,14 +197,26 @@ export default function EditProdukPage() {
           <div className="mb-8">
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
-                <h1 className="font-bold text-2xl text-black">Produk</h1>
-                <p className="text-xs text-black mt-1">Produk/Edit Produk</p>
+                <h1 className="font-bold text-3xl text-black">Produk</h1>
+                <p className="text-sm text-black mt-1">Produk/Edit Produk</p>
               </div>
               <div className="flex-shrink-0">
                 <PetaniHeader />
               </div>
             </div>
           </div>
+
+          {/* Success/Error Messages */}
+          {successMessage && (
+            <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded-[10px] text-sm">
+              {successMessage}
+            </div>
+          )}
+          {errorMessage && (
+            <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-[10px] text-sm">
+              {errorMessage}
+            </div>
+          )}
 
           {/* Form */}
           {isLoading ? (
@@ -168,21 +230,71 @@ export default function EditProdukPage() {
                 <div className="flex gap-8">
                   {/* Left Side - Product Image (Smaller) */}
                   <div className="flex-shrink-0">
-                    <div className="relative w-[250px] h-[300px] bg-white rounded-[10px] flex items-center justify-center overflow-hidden border border-gray-200">
-                      {/* Decorative green frame elements at top and bottom */}
-                      <div className="absolute top-0 left-0 right-0 h-8 bg-[#106113] opacity-30"></div>
-                      <div className="absolute bottom-0 left-0 right-0 h-8 bg-[#106113] opacity-30"></div>
-                      
-                      {productImage && (
-                        <div className="relative w-full h-full flex items-center justify-center p-4 z-10">
+                    <div className="relative w-[250px] h-[300px] border-2 border-dashed border-gray-300 rounded-[10px] flex flex-col items-center justify-center bg-[#f5f5f5] cursor-pointer hover:border-[#9e1c60] transition-colors">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            // Validasi ukuran file (max 5MB)
+                            if (file.size > 5 * 1024 * 1024) {
+                              setErrorMessage("Ukuran file terlalu besar. Maksimal 5MB.");
+                              setTimeout(() => setErrorMessage(""), 5000);
+                              return;
+                            }
+
+                            // Validasi tipe file
+                            if (!file.type.startsWith('image/')) {
+                              setErrorMessage("File harus berupa gambar.");
+                              setTimeout(() => setErrorMessage(""), 5000);
+                              return;
+                            }
+
+                            // Clear error jika validasi berhasil
+                            setErrorMessage("");
+
+                            setProductImageFile(file);
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                              setProductImage(reader.result as string);
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      />
+                      {productImage ? (
+                        <div className="relative w-full h-full flex items-center justify-center p-4">
                           <Image
                             src={productImage}
                             alt={formData.nama || "Produk"}
                             width={220}
                             height={280}
-                            className="max-w-full max-h-full object-contain"
+                            className="max-w-full max-h-full object-contain rounded-[10px]"
                             unoptimized
                           />
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center gap-3">
+                          <svg
+                            width="40"
+                            height="40"
+                            viewBox="0 0 40 40"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path
+                              d="M20 10V30M10 20H30"
+                              stroke="#000000"
+                              strokeWidth="1.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                          <p className="text-black text-center" style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '12px' }}>
+                            Klik untuk Ubah Foto
+                          </p>
                         </div>
                       )}
                     </div>
@@ -192,7 +304,7 @@ export default function EditProdukPage() {
                   <div className="flex-1 flex flex-col gap-6">
                     {/* Nama */}
                     <div className="flex flex-col gap-[11px]">
-                      <label className="font-bold text-black" style={{ fontSize: '12px' }}>
+                      <label className="font-bold text-black" style={{ fontSize: '14px' }}>
                         Nama
                       </label>
                       <input
@@ -201,14 +313,14 @@ export default function EditProdukPage() {
                         onChange={(e) => setFormData({ ...formData, nama: e.target.value })}
                         placeholder="Nama produk"
                         className={`bg-[#f5f5f5] h-[35px] px-3 py-2 rounded-[5px] outline-none focus:ring-2 focus:ring-[#9e1c60] ${formData.nama ? 'text-black' : 'text-black/50'}`}
-                        style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '10px' }}
+                        style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '14px' }}
                         required
                       />
                     </div>
 
                     {/* Harga */}
                     <div className="flex flex-col gap-[11px]">
-                      <label className="font-bold text-black" style={{ fontSize: '12px' }}>
+                      <label className="font-bold text-black" style={{ fontSize: '14px' }}>
                         Harga (Rp)
                       </label>
                       <input
@@ -220,15 +332,15 @@ export default function EditProdukPage() {
                         }}
                         placeholder="Harga"
                         className={`bg-[#f5f5f5] h-[35px] px-3 py-2 rounded-[5px] outline-none focus:ring-2 focus:ring-[#9e1c60] ${formData.harga ? 'text-black' : 'text-black/50'}`}
-                        style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '10px' }}
+                        style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '14px' }}
                         required
                       />
                     </div>
 
                     {/* Stok */}
                     <div className="flex flex-col gap-[11px]">
-                      <label className="font-bold text-black" style={{ fontSize: '12px' }}>
-                        Stok
+                      <label className="font-bold text-black" style={{ fontSize: '14px' }}>
+                        Stok (Max: {formData.stokMax.toLocaleString('id-ID')})
                       </label>
                       <div className="flex items-center gap-3">
                         <button
@@ -240,11 +352,41 @@ export default function EditProdukPage() {
                         >
                           -
                         </button>
-                        <div className="flex-1 bg-[#f5f5f5] h-[35px] px-3 py-2 rounded-[5px] flex items-center justify-center">
-                          <span className="text-black" style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '10px' }}>
-                            {formData.stok}/{formData.stokMax}
-                          </span>
-                        </div>
+                        <input
+                          type="number"
+                          min="0"
+                          max={formData.stokMax}
+                          value={formData.stok}
+                          onChange={(e) => {
+                            const value = parseInt(e.target.value) || 0;
+                            if (value >= 0 && value <= formData.stokMax) {
+                              setFormData({ ...formData, stok: value });
+                            } else if (value > formData.stokMax) {
+                              setFormData({ ...formData, stok: formData.stokMax });
+                            } else if (e.target.value === '' || value < 0) {
+                              // Allow empty input for better UX
+                              const numValue = parseInt(e.target.value);
+                              if (isNaN(numValue) || numValue < 0) {
+                                setFormData({ ...formData, stok: 0 });
+                              }
+                            }
+                          }}
+                          onBlur={(e) => {
+                            // Ensure value is valid on blur
+                            const value = parseInt(e.target.value) || 0;
+                            if (value < 0) {
+                              setFormData({ ...formData, stok: 0 });
+                            } else if (value > formData.stokMax) {
+                              setFormData({ ...formData, stok: formData.stokMax });
+                            }
+                          }}
+                          className="flex-1 bg-[#f5f5f5] h-[35px] px-3 py-2 rounded-[5px] outline-none focus:ring-2 focus:ring-[#9e1c60] text-black text-center"
+                          style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '14px' }}
+                          required
+                        />
+                        <span className="text-black/50" style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '12px' }}>
+                          / {formData.stokMax.toLocaleString('id-ID')}
+                        </span>
                         <button
                           type="button"
                           onClick={handleStokIncrement}
@@ -281,7 +423,7 @@ export default function EditProdukPage() {
                     type="submit"
                     disabled={isSaving}
                     className="bg-[#27a73d] h-[35px] rounded-[5px] text-white font-bold hover:bg-[#1f8a31] transition-colors disabled:opacity-50 flex items-center justify-center text-center"
-                    style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '12px' }}
+                    style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '14px' }}
                   >
                     {isSaving ? "Menyimpan..." : "Simpan"}
                   </button>
@@ -289,7 +431,7 @@ export default function EditProdukPage() {
                     type="button"
                     onClick={handleBack}
                     className="bg-[#e09028] h-[35px] rounded-[5px] text-white font-bold hover:bg-[#c77a1f] transition-colors flex items-center justify-center text-center"
-                    style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '12px' }}
+                    style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '14px' }}
                   >
                     Kembali
                   </button>

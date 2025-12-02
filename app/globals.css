@@ -29,16 +29,23 @@
   }
 }
 
+html,
 body {
-  background: var(--background);
+  background: #fef7f5;
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  min-height: 100vh;
+}
+
+body {
+  background: #fef7f5;
 }
 
 @keyframes fadeIn {
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }
@@ -49,6 +56,7 @@ body {
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -85,14 +93,14 @@ div[data-nextjs-toast],
 div[data-nextjs-dialog],
 a[href*="nextjs.org"][target="_blank"],
 a[href*="vercel.com"][target="_blank"],
-body > div[style*="position: fixed"][style*="left: 0"][style*="bottom: 0"],
-body > div[style*="position:fixed"][style*="left:0"][style*="bottom:0"],
-body > div[style*="position: fixed"][style*="left:0"][style*="bottom:0"],
+body>div[style*="position: fixed"][style*="left: 0"][style*="bottom: 0"],
+body>div[style*="position:fixed"][style*="left:0"][style*="bottom:0"],
+body>div[style*="position: fixed"][style*="left:0"][style*="bottom:0"],
 *[style*="position: fixed"][style*="left: 0"][style*="bottom: 0"],
 *[style*="position:fixed"][style*="left:0"][style*="bottom:0"],
 /* Target semua elemen fixed di bottom-left yang mungkin adalah logo Next.js */
-body > div[style*="position"][style*="left"][style*="bottom"],
-html > body > div[style*="position"][style*="left"][style*="bottom"],
+body>div[style*="position"][style*="left"][style*="bottom"],
+html>body>div[style*="position"][style*="left"][style*="bottom"],
 div[style*="left: 0"][style*="bottom: 0"][style*="position: fixed"],
 div[style*="left:0"][style*="bottom:0"][style*="position:fixed"] {
   display: none !important;

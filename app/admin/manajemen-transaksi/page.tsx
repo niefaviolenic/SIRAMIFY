@@ -360,7 +360,7 @@ export default function ManajemenTransaksiPage() {
                           <select
                             value={transaction.status}
                             onChange={(e) => handleUpdateStatus(transaction, e.target.value as "pending" | "selesai" | "dibatalkan")}
-                            className="px-3 py-1 rounded-full text-xs font-bold text-white border-0 focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
+                            className="px-3 py-1 rounded-[10px] text-xs font-bold text-white border-0 focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
                             style={{ backgroundColor: getStatusColor(transaction.status) }}
                           >
                             <option value="pending">Pending</option>

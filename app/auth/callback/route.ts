@@ -21,17 +21,46 @@ export async function GET(request: NextRequest) {
 
     // Jika ada role dari query parameter (untuk registrasi Google)
     if (role && data.user) {
-      // Simpan role ke database
-      await supabase
+      // Simpan/update user ke tabel users (langsung masuk ke auth.users dan tabel users)
+      const { error: userError } = await supabase
         .from('users')
         .upsert({
           id: data.user.id,
-          email: data.user.email,
-          full_name: data.user.user_metadata?.full_name || data.user.user_metadata?.name || '',
+          email: data.user.email || '',
+          full_name: data.user.user_metadata?.full_name || data.user.user_metadata?.name || data.user.email?.split('@')[0] || 'User',
           role: role,
+          status: 'active',
         }, {
           onConflict: 'id'
         });
+
+      if (userError) {
+        console.error('Error saving user to users table:', userError);
+        // Tetap lanjutkan, user sudah ada di auth.users
+      } else {
+        console.log('User saved to users table successfully');
+      }
+    } else if (data.user) {
+      // Jika tidak ada role (login biasa dengan Google), cek apakah user sudah ada
+      const { data: existingUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', data.user.id)
+        .single();
+
+      // Jika belum ada, buat dengan role default dari metadata atau 'pembeli'
+      if (!existingUser) {
+        const defaultRole = data.user.user_metadata?.role || 'pembeli';
+        await supabase
+          .from('users')
+          .insert({
+            id: data.user.id,
+            email: data.user.email || '',
+            full_name: data.user.user_metadata?.full_name || data.user.user_metadata?.name || data.user.email?.split('@')[0] || 'User',
+            role: defaultRole,
+            status: 'active',
+          });
+      }
     }
 
     // Redirect berdasarkan role

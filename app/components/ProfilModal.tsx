@@ -1,20 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
+import React from "react";
+import { supabase } from "@/utils/supabaseClient";
 
 const imgImage9 = "/profile.png";
-const imgMaterialSymbolsEditOutline = "https://www.figma.com/api/mcp/asset/28d01788-21aa-43f5-8042-94832c343afb";
 
 interface ProfilModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onUpdate?: () => void;
 }
 
-export default function ProfilModal({ isOpen, onClose }: ProfilModalProps) {
+export default function ProfilModal({ isOpen, onClose, onUpdate }: ProfilModalProps) {
   const [formData, setFormData] = useState({
-    namaLengkap: "Budi Budiman",
-    email: "budiman123@gmail.com",
+    namaLengkap: "",
+    email: "",
     password: "********",
     passwordBaru: "",
     konfirmasiPasswordBaru: ""
@@ -23,6 +25,72 @@ export default function ProfilModal({ isOpen, onClose }: ProfilModalProps) {
   const [showPasswordBaru, setShowPasswordBaru] = useState(false);
   const [showKonfirmasiPassword, setShowKonfirmasiPassword] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [profileImage, setProfileImage] = useState<string>(imgImage9);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchUserData();
+    }
+  }, [isOpen]);
+
+  const fetchUserData = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        // Fetch profile data from users table
+        const { data: profile } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+        setFormData(prev => ({
+          ...prev,
+          namaLengkap: profile?.full_name || user.user_metadata?.full_name || "",
+          email: user.email || "",
+        }));
+
+        if (profile?.photo_profile) {
+          setProfileImage(profile.photo_profile);
+        } else if (user.user_metadata?.avatar_url) {
+          setProfileImage(user.user_metadata.avatar_url);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching user data:", error);
+    }
+  };
+
+  const handleImageClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validasi tipe file
+      if (!file.type.startsWith('image/')) {
+        alert('File harus berupa gambar');
+        return;
+      }
+
+      // Validasi ukuran file (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Ukuran file maksimal 5MB');
+        return;
+      }
+
+      setSelectedFile(file);
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProfileImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -31,22 +99,72 @@ export default function ProfilModal({ isOpen, onClose }: ProfilModalProps) {
     setIsSaving(true);
 
     try {
-      // TODO: Update profile in Supabase
-      // const { error } = await supabase
-      //   .from("users")
-      //   .update({
-      //     nama: formData.namaLengkap,
-      //     email: formData.email,
-      //     password: formData.passwordBaru
-      //   })
-      //   .eq("id", userId);
-      // if (error) throw error;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("No user found");
+
+      let photoUrl = profileImage;
+
+      // Upload image if selected
+      if (selectedFile) {
+        const fileExt = selectedFile.name.split('.').pop();
+        const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+        const filePath = `${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('avatars')
+          .upload(filePath, selectedFile);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('avatars')
+          .getPublicUrl(filePath);
+
+        photoUrl = publicUrl;
+      }
+
+      // Update users table
+      const { error: updateError } = await supabase
+        .from("users")
+        .update({
+          full_name: formData.namaLengkap,
+          photo_profile: photoUrl,
+        })
+        .eq("id", user.id);
+
+      if (updateError) throw updateError;
+
+      // Update auth password if provided
+      if (formData.passwordBaru) {
+        if (formData.passwordBaru !== formData.konfirmasiPasswordBaru) {
+          alert("Password baru dan konfirmasi tidak cocok");
+          setIsSaving(false);
+          return;
+        }
+
+        const { error: authError } = await supabase.auth.updateUser({
+          password: formData.passwordBaru
+        });
+
+        if (authError) throw authError;
+      }
+
+      // Update auth email if changed
+      if (formData.email !== user.email) {
+        const { error: emailError } = await supabase.auth.updateUser({
+          email: formData.email
+        });
+        if (emailError) throw emailError;
+      }
 
       alert("Profil berhasil diperbarui!");
       onClose();
+      // Refresh data
+      fetchUserData();
+      if (onUpdate) onUpdate();
     } catch (error: any) {
       console.error("Error updating profile:", error);
-      alert("Gagal memperbarui profil. Silakan coba lagi.");
+      alert(`Gagal memperbarui profil: ${error.message}`);
     } finally {
       setIsSaving(false);
     }
@@ -73,52 +191,71 @@ export default function ProfilModal({ isOpen, onClose }: ProfilModalProps) {
         }}
       >
         {/* Title */}
-        <h2 className="font-bold text-black mb-6" style={{ fontSize: '20px' }}>
+        <h2 className="font-bold text-black mb-6" style={{ fontSize: '22px' }}>
           Profil Akun
         </h2>
 
         <div className="flex gap-6 items-start">
           {/* Left Side - Profile Picture & Buttons */}
           <div className="flex-shrink-0 flex flex-col items-center w-[140px]">
-            <div className="relative w-[120px] h-[120px] rounded-full overflow-hidden border-2 border-[#9e1c60] mb-5 shadow-md">
-              <Image
-                src={imgImage9}
-                alt="Profile"
-                fill
-                className="object-cover object-center"
-                style={{ aspectRatio: '1/1', objectFit: 'cover', objectPosition: 'center' }}
-                unoptimized
-              />
-              {/* Edit Icon */}
-              <div className="absolute bottom-0 right-0 w-[28px] h-[28px] bg-white rounded-full flex items-center justify-center cursor-pointer hover:bg-[#f0f0f0] transition-colors border-2 border-[#9e1c60] shadow-md">
+            <div className="relative mb-5">
+              <div className="relative w-[120px] h-[120px] rounded-full overflow-hidden border-2 border-[#9e1c60] shadow-md">
                 <Image
-                  src={imgMaterialSymbolsEditOutline}
-                  alt="Edit"
-                  width={14}
-                  height={14}
-                  className="object-contain"
-                  style={{ filter: 'brightness(0) saturate(100%) invert(27%) sepia(51%) saturate(2878%) hue-rotate(300deg) brightness(92%) contrast(92%)' }}
+                  src={profileImage}
+                  alt="Profile"
+                  fill
+                  className="object-cover object-center"
+                  style={{ aspectRatio: '1/1', objectFit: 'cover', objectPosition: 'center' }}
                   unoptimized
                 />
+                {/* Hidden file input */}
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleImageChange}
+                  accept="image/*"
+                  className="hidden"
+                />
+              </div>
+              {/* Edit Icon - Outside the circle */}
+              <div
+                onClick={handleImageClick}
+                className="absolute bottom-0 right-0 w-[36px] h-[36px] bg-white rounded-full flex items-center justify-center cursor-pointer hover:bg-[#f0f0f0] transition-colors border-2 border-gray-300 shadow-lg z-10"
+                style={{ transform: 'translate(8px, 8px)' }}
+              >
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
+                    fill="#000000"
+                    stroke="#000000"
+                    strokeWidth="1"
+                  />
+                </svg>
               </div>
             </div>
-            
+
             {/* Buttons */}
             <div className="flex flex-col gap-2.5 w-full">
               <button
                 type="button"
                 onClick={handleSubmit}
                 disabled={isSaving}
-                className="bg-[#27a73d] h-[35px] rounded-[5px] text-white font-bold hover:bg-[#1f8a31] active:bg-[#1a7a2a] transition-all duration-200 disabled:opacity-50 flex items-center justify-center text-center shadow-md w-full"
-                style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '12px' }}
+                className="bg-[#27a73d] h-[35px] rounded-[5px] text-white font-bold hover:bg-[#1f8a31] active:bg-[#1a7a2a] transition-all duration-200 disabled:opacity-50 flex items-center justify-center text-center shadow-md w-full cursor-pointer"
+                style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '14px' }}
               >
                 {isSaving ? "Menyimpan..." : "Simpan"}
               </button>
               <button
                 type="button"
                 onClick={onClose}
-                className="bg-[#e09028] h-[35px] rounded-[5px] text-white font-bold hover:bg-[#c77a1f] active:bg-[#b56a1a] transition-all duration-200 flex items-center justify-center text-center shadow-md w-full"
-                style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '12px' }}
+                className="bg-[#e09028] h-[35px] rounded-[5px] text-white font-bold hover:bg-[#c77a1f] active:bg-[#b56a1a] transition-all duration-200 flex items-center justify-center text-center shadow-md w-full cursor-pointer"
+                style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '14px' }}
               >
                 Kembali
               </button>
@@ -129,7 +266,7 @@ export default function ProfilModal({ isOpen, onClose }: ProfilModalProps) {
           <div className="flex-1 flex flex-col gap-3.5">
             {/* Nama Lengkap */}
             <div className="flex flex-col gap-1.5">
-              <label className="font-bold text-black" style={{ fontSize: '12px' }}>
+              <label className="font-bold text-black" style={{ fontSize: '14px' }}>
                 Nama Lengkap
               </label>
               <input
@@ -137,14 +274,14 @@ export default function ProfilModal({ isOpen, onClose }: ProfilModalProps) {
                 value={formData.namaLengkap}
                 onChange={(e) => setFormData({ ...formData, namaLengkap: e.target.value })}
                 className="bg-[#f5f5f5] h-[35px] px-3 py-2 rounded-[5px] outline-none focus:ring-2 focus:ring-[#9e1c60] text-black transition-all"
-                style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '10px' }}
+                style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '13px' }}
                 required
               />
             </div>
 
             {/* Email */}
             <div className="flex flex-col gap-1.5">
-              <label className="font-bold text-black" style={{ fontSize: '12px' }}>
+              <label className="font-bold text-black" style={{ fontSize: '14px' }}>
                 Email
               </label>
               <input
@@ -152,14 +289,14 @@ export default function ProfilModal({ isOpen, onClose }: ProfilModalProps) {
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 className="bg-[#f5f5f5] h-[35px] px-3 py-2 rounded-[5px] outline-none focus:ring-2 focus:ring-[#9e1c60] text-black transition-all"
-                style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '10px' }}
+                style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '13px' }}
                 required
               />
             </div>
 
             {/* Password */}
             <div className="flex flex-col gap-1.5">
-              <label className="font-bold text-black" style={{ fontSize: '12px' }}>
+              <label className="font-bold text-black" style={{ fontSize: '14px' }}>
                 Password
               </label>
               <div className="relative">
@@ -168,7 +305,7 @@ export default function ProfilModal({ isOpen, onClose }: ProfilModalProps) {
                   value={formData.password}
                   readOnly
                   className="bg-[#f5f5f5] h-[35px] px-3 py-2 pr-10 rounded-[5px] outline-none focus:ring-2 focus:ring-[#9e1c60] text-black w-full transition-all"
-                  style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '10px' }}
+                  style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '13px' }}
                 />
                 <button
                   type="button"
@@ -200,7 +337,7 @@ export default function ProfilModal({ isOpen, onClose }: ProfilModalProps) {
 
             {/* Password Baru */}
             <div className="flex flex-col gap-1.5">
-              <label className="font-bold text-black" style={{ fontSize: '12px' }}>
+              <label className="font-bold text-black" style={{ fontSize: '14px' }}>
                 Password Baru
               </label>
               <div className="relative">
@@ -210,7 +347,7 @@ export default function ProfilModal({ isOpen, onClose }: ProfilModalProps) {
                   onChange={(e) => setFormData({ ...formData, passwordBaru: e.target.value })}
                   placeholder="Masukkan Password Baru Anda"
                   className={`bg-[#f5f5f5] h-[35px] px-3 py-2 pr-10 rounded-[5px] outline-none focus:ring-2 focus:ring-[#9e1c60] w-full transition-all ${formData.passwordBaru ? 'text-black' : 'text-black/50'}`}
-                  style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '10px' }}
+                  style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '13px' }}
                 />
                 <button
                   type="button"
@@ -242,7 +379,7 @@ export default function ProfilModal({ isOpen, onClose }: ProfilModalProps) {
 
             {/* Konfirmasi Password Baru */}
             <div className="flex flex-col gap-1.5">
-              <label className="font-bold text-black" style={{ fontSize: '12px' }}>
+              <label className="font-bold text-black" style={{ fontSize: '14px' }}>
                 Konfirmasi Password Baru
               </label>
               <div className="relative">
@@ -252,7 +389,7 @@ export default function ProfilModal({ isOpen, onClose }: ProfilModalProps) {
                   onChange={(e) => setFormData({ ...formData, konfirmasiPasswordBaru: e.target.value })}
                   placeholder="Konfirmasi Password Baru"
                   className={`bg-[#f5f5f5] h-[35px] px-3 py-2 pr-10 rounded-[5px] outline-none focus:ring-2 focus:ring-[#9e1c60] w-full transition-all ${formData.konfirmasiPasswordBaru ? 'text-black' : 'text-black/50'}`}
-                  style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '10px' }}
+                  style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '13px' }}
                 />
                 <button
                   type="button"

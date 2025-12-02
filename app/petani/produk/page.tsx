@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import PetaniSidebar from "@/app/components/PetaniSidebar";
 import PetaniHeader from "@/app/components/PetaniHeader";
 import Image from "next/image";
+import { supabase } from "@/utils/supabaseClient";
 
 const imgIconamoonEditLight = "https://www.figma.com/api/mcp/asset/e12eaffa-ec34-4b35-ac23-8b0719bfdc0d";
 const imgMaterialSymbolsDeleteRounded = "https://www.figma.com/api/mcp/asset/2b8b2938-0c34-49e2-b4a7-762bbfa895f7";
@@ -28,41 +29,71 @@ export default function ProdukPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
-    // TODO: Fetch products from Supabase
-    // For now, using mock data
-    const mockProducts: Product[] = [
-      {
-        id: "1",
-        no: 1,
-        foto: "https://www.figma.com/api/mcp/asset/32b71d60-7912-4d47-9a8d-afbbe6983ef4",
-        namaProduk: "Benih Selada Merah",
-        harga: "Rp7.000",
-        stok: "100/1.000",
-        status: "Tersedia"
-      },
-      {
-        id: "2",
-        no: 2,
-        foto: "https://www.figma.com/api/mcp/asset/fb9b784c-60e8-46f5-9cd9-c464126ca6c8",
-        namaProduk: "Selada Oakloaf Merah",
-        harga: "Rp32.000",
-        stok: "50/1.000",
-        status: "Stok Menipis"
-      },
-      {
-        id: "3",
-        no: 3,
-        foto: "https://www.figma.com/api/mcp/asset/8c1614d4-747c-47ce-baf8-be35bd3ba6de",
-        namaProduk: "Pupuk Organik",
-        harga: "Rp97.000",
-        stok: "0/1.000",
-        status: "Habis"
-      }
-    ];
-    
-    setProducts(mockProducts);
-    setIsLoading(false);
+    loadProducts();
   }, []);
+
+  const loadProducts = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        console.error("User error:", userError);
+        router.push("/masuk");
+        return;
+      }
+
+      console.log("Loading products for user:", user.id);
+
+      // Fetch products dari Supabase
+      const { data, error } = await supabase
+        .from("produk")
+        .select("*")
+        .eq("petani_id", user.id)
+        .order("created_at", { ascending: false });
+
+      console.log("Products data:", data);
+      console.log("Products error:", error);
+
+      if (error) {
+        console.error("Supabase error:", error);
+        throw error;
+      }
+
+      // Map data ke format yang dibutuhkan
+      const mappedProducts: Product[] = (data || []).map((item: any, index: number) => {
+        // Hitung status berdasarkan stok
+        let status: "Tersedia" | "Stok Menipis" | "Habis" = "Tersedia";
+        if (item.stok === 0) {
+          status = "Habis";
+        } else if (item.stok <= 100) {
+          status = "Stok Menipis";
+        }
+
+        // Format harga ke "RpX.XXX"
+        const hargaFormatted = `Rp${item.harga.toLocaleString("id-ID")}`;
+
+        return {
+          id: item.id,
+          no: index + 1,
+          foto: item.foto || "https://via.placeholder.com/100x60",
+          namaProduk: item.nama,
+          harga: hargaFormatted,
+          stok: `${item.stok}/${item.stok_max.toLocaleString("id-ID")}`,
+          status: status,
+        };
+      });
+
+      setProducts(mappedProducts);
+    } catch (error: any) {
+      console.error("Error loading products:", error);
+      alert("Gagal memuat produk. Silakan coba lagi.");
+      setProducts([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -71,7 +102,7 @@ export default function ProdukPage() {
       case "Stok Menipis":
         return "#ff9500";
       case "Habis":
-        return "#ba0b0b";
+        return "#dc2626";
       default:
         return "#6b7280";
     }
@@ -90,19 +121,18 @@ export default function ProdukPage() {
     if (!deleteId) return;
 
     try {
-      // TODO: Delete from Supabase
-      // const { error } = await supabase
-      //   .from("produk")
-      //   .delete()
-      //   .eq("id", deleteId);
-      // if (error) throw error;
+      const { error } = await supabase
+        .from("produk")
+        .delete()
+        .eq("id", deleteId);
 
-      // For now, just remove from state
-      setProducts(products.filter(p => p.id !== deleteId));
-      
+      if (error) throw error;
+
+      // Reload products
+      loadProducts();
       setShowDeleteModal(false);
       setDeleteId(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error deleting product:", error);
       alert("Gagal menghapus produk. Silakan coba lagi.");
       setShowDeleteModal(false);
@@ -120,19 +150,19 @@ export default function ProdukPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex">
+    <div className="min-h-screen bg-[#fef7f5] flex">
       {/* Sidebar */}
       <PetaniSidebar />
 
       {/* Main Content */}
-      <div className="flex-3 ml-[200px] min-h-screen">
+      <div className="flex-1 ml-[200px] min-h-screen bg-[#fef7f5]" style={{ minHeight: '100vh', width: 'calc(100% - 180px)', paddingBottom: '40px' }}>
         <div className="p-8" style={{ paddingLeft: '10px' }}>
           {/* Header */}
           <div className="mb-8">
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
-                <h1 className="font-bold text-2xl text-black">Produk</h1>
-                <p className="text-xs text-black mt-1">Produk</p>
+                <h1 className="font-bold text-3xl text-black">Produk</h1>
+                <p className="text-sm text-black mt-1">Produk</p>
               </div>
               <div className="flex-shrink-0">
                 <PetaniHeader />
@@ -141,36 +171,44 @@ export default function ProdukPage() {
           </div>
 
           {/* Card Statistik */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-            <div className="border border-[#9e1c60] rounded-[10px] p-4 bg-white">
-              <p className="text-black mb-2" style={{ fontSize: '10px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
+            <div className="rounded-[15px] p-4 shadow-lg hover:shadow-xl transition-all duration-300" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}>
+              <p className="text-black mb-2" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
                 Total Produk
               </p>
-              <p className="font-bold text-black" style={{ fontSize: '20px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+              <p className="font-bold text-black" style={{ fontSize: '24px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
                 {products.length}
               </p>
             </div>
-            <div className="border border-[#9e1c60] rounded-[10px] p-4 bg-white">
-              <p className="text-black mb-2" style={{ fontSize: '10px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+            <div className="rounded-[15px] p-4 shadow-lg hover:shadow-xl transition-all duration-300" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}>
+              <p className="text-black mb-2" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
                 Total Penjualan
               </p>
-              <p className="font-bold text-black" style={{ fontSize: '20px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+              <p className="font-bold text-black" style={{ fontSize: '24px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
                 24
               </p>
             </div>
-            <div className="border border-[#9e1c60] rounded-[10px] p-4 bg-white">
-              <p className="text-black mb-2" style={{ fontSize: '10px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+            <div className="rounded-[15px] p-4 shadow-lg hover:shadow-xl transition-all duration-300" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}>
+              <p className="text-black mb-2" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
                 Produk Tersedia
               </p>
-              <p className="font-bold text-black" style={{ fontSize: '20px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+              <p className="font-bold text-black" style={{ fontSize: '24px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
                 {products.filter(p => p.status === "Tersedia").length}
               </p>
             </div>
-            <div className="border border-[#9e1c60] rounded-[10px] p-4 bg-white">
-              <p className="text-black mb-2" style={{ fontSize: '10px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+            <div className="rounded-[15px] p-4 shadow-lg hover:shadow-xl transition-all duration-300" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}>
+              <p className="text-black mb-2" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                Stok Menipis
+              </p>
+              <p className="font-bold text-black" style={{ fontSize: '24px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                {products.filter(p => p.status === "Stok Menipis").length}
+              </p>
+            </div>
+            <div className="rounded-[15px] p-4 shadow-lg hover:shadow-xl transition-all duration-300" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}>
+              <p className="text-black mb-2" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
                 Produk Habis
               </p>
-              <p className="font-bold text-black" style={{ fontSize: '20px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+              <p className="font-bold text-black" style={{ fontSize: '24px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
                 {products.filter(p => p.status === "Habis").length}
               </p>
             </div>
@@ -181,7 +219,7 @@ export default function ProdukPage() {
             <button
               onClick={handleTambahProduk}
               className="px-4 py-2 bg-[#9e1c60] text-white rounded-[10px] hover:bg-[#7d1650] hover:shadow-md transition-all duration-200 flex items-center gap-2"
-              style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}
+              style={{ fontSize: '14px', fontFamily: 'Arial, Helvetica, sans-serif' }}
             >
               <svg
                 width="16"
@@ -204,48 +242,63 @@ export default function ProdukPage() {
             <button
               onClick={() => router.push("/petani/produk/pesanan")}
               className="px-4 py-2 bg-[#9e1c60] text-white rounded-[10px] hover:bg-[#7d1650] hover:shadow-md transition-all duration-200 flex items-center gap-2"
-              style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}
+              style={{ fontSize: '14px', fontFamily: 'Arial, Helvetica, sans-serif' }}
             >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M2 2H4L4.5 6M4.5 6L5.5 12H12.5L13.5 6H4.5ZM4.5 6H14M6 13.5C6 13.7761 5.77614 14 5.5 14C5.22386 14 5 13.7761 5 13.5C5 13.2239 5.22386 13 5.5 13C5.77614 13 6 13.2239 6 13.5ZM12 13.5C12 13.7761 11.7761 14 11.5 14C11.2239 14 11 13.7761 11 13.5C11 13.2239 11.2239 13 11.5 13C11.7761 13 12 13.2239 12 13.5Z"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
               Pesanan
             </button>
           </div>
 
           {/* Table */}
-          <div className="bg-white rounded-[10px] overflow-hidden" style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}>
+          <div className="rounded-[15px] overflow-hidden shadow-lg" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)', fontFamily: 'Arial, Helvetica, sans-serif' }}>
             <div className="overflow-x-auto">
               <table className="w-full">
                 {/* Table Header */}
                 <thead>
                   <tr className="bg-[#eed2e1] h-[40px]">
-                    <th className="px-4 text-center font-bold text-[#181818] w-[62px]" style={{ fontSize: '12px' }}>
+                    <th className="px-4 text-center font-bold text-[#181818] w-[62px]" style={{ fontSize: '14px' }}>
                       No
                     </th>
-                    <th className="px-4 text-center font-bold text-[#181818] min-w-[100px]" style={{ fontSize: '12px' }}>
+                    <th className="px-4 text-center font-bold text-[#181818] min-w-[100px]" style={{ fontSize: '14px' }}>
                       Foto
                     </th>
-                    <th className="px-4 text-center font-bold text-[#181818] min-w-[146px]" style={{ fontSize: '12px' }}>
+                    <th className="px-4 text-center font-bold text-[#181818] min-w-[146px]" style={{ fontSize: '14px' }}>
                       Nama Produk
                     </th>
-                    <th className="px-4 text-center font-bold text-[#181818] min-w-[146px]" style={{ fontSize: '12px' }}>
+                    <th className="px-4 text-center font-bold text-[#181818] min-w-[146px]" style={{ fontSize: '14px' }}>
                       Harga
                     </th>
-                    <th className="px-4 text-center font-bold text-[#181818] min-w-[146px]" style={{ fontSize: '12px' }}>
+                    <th className="px-4 text-center font-bold text-[#181818] min-w-[146px]" style={{ fontSize: '14px' }}>
                       Stok
                     </th>
-                    <th className="px-4 text-center font-bold text-[#181818] w-[100px]" style={{ fontSize: '12px' }}>
+                    <th className="px-4 text-center font-bold text-[#181818] w-[100px]" style={{ fontSize: '14px' }}>
                       Status
                     </th>
-                    <th className="px-4 text-center font-bold text-[#181818] min-w-[190px]" style={{ fontSize: '12px' }}>
+                    <th className="px-4 text-center font-bold text-[#181818] min-w-[190px]" style={{ fontSize: '14px' }}>
                       Aksi
                     </th>
                   </tr>
                 </thead>
 
                 {/* Table Body */}
-                <tbody className="bg-white">
+                <tbody style={{ background: 'linear-gradient(to bottom, #ffffff 0%, #faf8fb 100%)' }}>
                   {isLoading ? (
                     <tr>
-                      <td colSpan={7} className="px-4 py-8 text-center text-gray-500" style={{ fontSize: '10px' }}>
+                      <td colSpan={7} className="px-4 py-8 text-center text-gray-500" style={{ fontSize: '12px' }}>
                         Memuat data...
                       </td>
                     </tr>
@@ -259,10 +312,19 @@ export default function ProdukPage() {
                     products.map((product) => (
                       <tr
                         key={product.id}
-                        className="h-[50px] border-b border-gray-200 last:border-b-0 hover:bg-gray-50 transition"
+                        className="h-[50px] border-b border-[#9e1c60]/15 last:border-b-0 transition"
+                        style={{ 
+                          background: 'linear-gradient(to bottom, #ffffff 0%, #faf8fb 100%)',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = 'linear-gradient(to bottom, #faf5f8 0%, #f5e8f0 100%)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'linear-gradient(to bottom, #ffffff 0%, #faf8fb 100%)';
+                        }}
                       >
                         <td className="px-4 text-center">
-                          <p className="text-[#181818]" style={{ fontSize: '10px' }}>{product.no}</p>
+                          <p className="text-[#181818]" style={{ fontSize: '12px' }}>{product.no}</p>
                         </td>
                         <td className="px-4 text-center">
                           <div className="flex items-center justify-center">
@@ -279,13 +341,13 @@ export default function ProdukPage() {
                           </div>
                         </td>
                         <td className="px-4 text-center">
-                          <p className="text-[#181818]" style={{ fontSize: '10px' }}>{product.namaProduk}</p>
+                          <p className="text-[#181818]" style={{ fontSize: '12px' }}>{product.namaProduk}</p>
                         </td>
                         <td className="px-4 text-center">
-                          <p className="text-[#181818]" style={{ fontSize: '10px' }}>{product.harga}</p>
+                          <p className="text-[#181818]" style={{ fontSize: '12px' }}>{product.harga}</p>
                         </td>
                         <td className="px-4 text-center">
-                          <p className="text-[#181818]" style={{ fontSize: '10px' }}>{product.stok}</p>
+                          <p className="text-[#181818]" style={{ fontSize: '12px' }}>{product.stok}</p>
                         </td>
                         <td className="px-4 text-center">
                           <div className="flex items-center justify-center">
@@ -298,7 +360,7 @@ export default function ProdukPage() {
                                 maxWidth: '100px'
                               }}
                             >
-                              <p className="font-bold text-white text-center whitespace-nowrap" style={{ fontSize: '10px' }}>
+                              <p className="font-bold text-white text-center whitespace-nowrap" style={{ fontSize: '12px' }}>
                                 {product.status}
                               </p>
                             </div>
@@ -325,14 +387,9 @@ export default function ProdukPage() {
                               className="w-5 h-5 flex items-center justify-center hover:opacity-70 transition cursor-pointer"
                               title="Delete"
                             >
-                              <Image
-                                src={imgMaterialSymbolsDeleteRounded}
-                                alt="Delete"
-                                width={20}
-                                height={20}
-                                className="object-contain"
-                                unoptimized
-                              />
+                              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M6 19C6 20.1 6.9 21 8 21H16C17.1 21 18 20.1 18 19V7H6V19ZM19 4H15.5L14.5 3H9.5L8.5 4H5V6H19V4Z" fill="#dc2626"/>
+                              </svg>
                             </button>
                           </div>
                         </td>
@@ -349,18 +406,19 @@ export default function ProdukPage() {
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
         <div 
-          className="fixed inset-0 flex items-center justify-center z-50"
+          className="fixed inset-0 flex items-center justify-center z-50 py-8"
           onClick={handleDeleteCancel}
           style={{ 
             animation: 'fadeIn 0.2s ease-in-out',
             fontFamily: 'Arial, Helvetica, sans-serif',
-            backgroundColor: 'rgba(255, 255, 255, 0.1)'
+            backgroundColor: 'rgba(255, 255, 255, 0.5)'
           }}
         >
           <div 
-            className="bg-white rounded-[20px] p-8 max-w-sm w-full mx-4 shadow-2xl border-2 border-[#9e1c60]"
+            className="rounded-[15px] p-8 max-w-sm w-full mx-4 relative shadow-2xl"
             onClick={(e) => e.stopPropagation()}
             style={{ 
+              background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)',
               animation: 'slideUp 0.3s ease-out',
               fontFamily: 'Arial, Helvetica, sans-serif'
             }}
@@ -374,7 +432,7 @@ export default function ProdukPage() {
             
             {/* Message */}
             <div className="text-center mb-8">
-              <p className="text-[#181818] text-base font-normal leading-relaxed" style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}>
+              <p className="text-[#181818] text-lg font-normal leading-relaxed" style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}>
                 Anda yakin ingin menghapus produk tersebut?
               </p>
             </div>
@@ -383,17 +441,17 @@ export default function ProdukPage() {
             <div className="flex gap-3">
               <button
                 onClick={handleDeleteCancel}
-                className="flex-1 py-3 rounded-[10px] bg-[#ff9500] text-white hover:bg-[#e68500] active:bg-[#cc7500] transition-all duration-200 font-semibold"
-                style={{ fontSize: '14px', fontFamily: 'Arial, Helvetica, sans-serif' }}
+                className="flex-1 py-3 rounded-[10px] bg-[#ff9500] text-white hover:bg-[#e68500] transition font-semibold"
+                style={{ fontSize: '16px', fontFamily: 'Arial, Helvetica, sans-serif' }}
               >
-                Tidak
+                Batal
               </button>
               <button
                 onClick={handleDeleteConfirm}
-                className="flex-1 py-3 rounded-[10px] bg-[#106113] text-white hover:bg-[#0d4f0f] active:bg-[#0a3d0c] transition-all duration-200 font-semibold"
-                style={{ fontSize: '14px', fontFamily: 'Arial, Helvetica, sans-serif' }}
+                className="flex-1 py-3 rounded-[10px] bg-[#dc2626] text-white hover:bg-[#b91c1c] transition font-semibold"
+                style={{ fontSize: '16px', fontFamily: 'Arial, Helvetica, sans-serif' }}
               >
-                Ya
+                Hapus
               </button>
             </div>
           </div>

@@ -16,6 +16,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Siramify - Sistem Penyiraman Otomatis",
   description: "Siramify adalah sistem penyiraman otomatis berbasis web yang membantu petani menjaga tanaman tetap sehat dan efisien dalam penggunaan air.",
+  icons: {
+    icon: '/favicon.ico',
+  },
 };
 
 export default function RootLayout({
@@ -27,6 +30,7 @@ export default function RootLayout({
     <html lang="id">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        style={{ backgroundColor: '#fef7f5', minHeight: '100vh' }}
       >
         <RemoveNextJSLogo />
         {children}
