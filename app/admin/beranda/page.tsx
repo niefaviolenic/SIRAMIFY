@@ -12,7 +12,6 @@ export default function AdminBerandaPage() {
   const [statistics, setStatistics] = useState({
     totalPetani: 0,
     totalPembeli: 0,
-    totalAdmin: 0,
     totalUser: 0,
     totalProduk: 0,
     totalTransaksi: 0,
@@ -37,7 +36,6 @@ export default function AdminBerandaPage() {
 
       const petani = users?.filter(u => u.role === "petani").length || 0;
       const pembeli = users?.filter(u => u.role === "pembeli").length || 0;
-      const admin = users?.filter(u => u.role === "admin").length || 0;
 
       // Fetch product count (if products table exists)
       let productCount = 0;
@@ -75,7 +73,6 @@ export default function AdminBerandaPage() {
       setStatistics({
         totalPetani: petani,
         totalPembeli: pembeli,
-        totalAdmin: admin,
         totalUser: (users?.length || 0),
         totalProduk: productCount,
         totalTransaksi: transactionCount,
@@ -87,7 +84,6 @@ export default function AdminBerandaPage() {
       setStatistics({
         totalPetani: 12,
         totalPembeli: 45,
-        totalAdmin: 2,
         totalUser: 59,
         totalProduk: 23,
         totalTransaksi: 156,
@@ -162,7 +158,6 @@ export default function AdminBerandaPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             <StatCard title="Total Petani" value={statistics.totalPetani} />
             <StatCard title="Total Pembeli" value={statistics.totalPembeli} />
-            <StatCard title="Total Admin" value={statistics.totalAdmin} />
             <StatCard title="Total User" value={statistics.totalUser} />
             <StatCard title="Total Produk" value={statistics.totalProduk} />
             <StatCard title="Total Transaksi" value={statistics.totalTransaksi} />

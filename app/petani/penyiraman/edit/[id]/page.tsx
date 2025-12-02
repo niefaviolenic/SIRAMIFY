@@ -51,7 +51,7 @@ export default function EditPenyiramanPage() {
 
       // Coba dengan 'id' (lowercase - default Supabase)
       const result1 = await supabase
-        .from("monitoring")
+        .from("penyiraman")
         .select("*")
         .eq("id", id)
         .single();
@@ -63,7 +63,7 @@ export default function EditPenyiramanPage() {
       } else {
         // Coba dengan 'Id' (PascalCase)
         const result2 = await supabase
-          .from("monitoring")
+          .from("penyiraman")
           .select("*")
           .eq("Id", id)
           .single();
@@ -75,7 +75,7 @@ export default function EditPenyiramanPage() {
         } else {
           // Coba dengan 'ID' (uppercase)
           const result3 = await supabase
-          .from("monitoring")
+          .from("penyiraman")
           .select("*")
           .eq("ID", id)
           .single();
@@ -109,44 +109,67 @@ export default function EditPenyiramanPage() {
       console.log("Data berhasil dimuat:", data);
 
       if (data) {
-        // Format tanggal
+        // Format tanggal dan waktu dari kolom Tanggal
         const tanggalValue = data.Tanggal || data.tanggal || data.TANGGAL;
-        const date = tanggalValue ? new Date(tanggalValue) : (data.created_at ? new Date(data.created_at) : new Date());
-        const tanggal = date.toLocaleDateString("en-US", {
-          month: "2-digit",
-          day: "2-digit",
-          year: "2-digit",
-        });
-
-        // Format waktu - sama seperti di halaman penyiraman
-        // Karena waktu diisi manual, ambil dari created_at
+        
+        let tanggal = "";
         let waktu = "";
         
-        // Prioritas: kolom Waktu jika ada, jika tidak gunakan created_at
-        if (data.Waktu || data.waktu || data.WAKTU) {
-          waktu = String(data.Waktu || data.waktu || data.WAKTU).trim();
-          // Jika format waktu menggunakan titik (12.00), ubah ke titik dua (12:00) untuk input
-          if (waktu.includes('.')) {
-            waktu = waktu.replace(/\./g, ':');
-          }
-        } else if (data.created_at) {
-          // Gunakan waktu dari created_at (sama seperti di halaman penyiraman)
-          try {
-            const timeDate = new Date(data.created_at);
-            if (!isNaN(timeDate.getTime())) {
-              // Gunakan format id-ID seperti di halaman penyiraman, lalu ubah titik jadi titik dua
-              waktu = timeDate.toLocaleTimeString("id-ID", {
-                hour: "2-digit",
-                minute: "2-digit",
-              });
-              // Ubah format dari "12.00" menjadi "12:00" untuk input
-              if (waktu.includes('.')) {
-                waktu = waktu.replace(/\./g, ':');
-              }
+        if (tanggalValue) {
+          // Parse format "DD/MM/YYYY HH:MM"
+          const parts = tanggalValue.toString().trim().split(" ");
+          if (parts.length >= 2) {
+            const datePart = parts[0]; // "06/02/2022"
+            const timePart = parts[1]; // "01:25"
+            
+            // Parse tanggal (format DD/MM/YYYY) ke MM/DD/YY untuk input
+            const dateParts = datePart.split("/");
+            if (dateParts.length === 3) {
+              const day = dateParts[0];
+              const month = dateParts[1];
+              const year = dateParts[2].slice(-2); // Ambil 2 digit terakhir tahun
+              tanggal = `${month}/${day}/${year}`;
             }
-          } catch (e) {
-            console.error("Error parsing waktu:", e);
+            
+            // Parse waktu (format HH:MM)
+            if (timePart) {
+              waktu = timePart; // Sudah dalam format HH:MM
+            }
+          } else {
+            // Hanya tanggal saja
+            try {
+              const date = new Date(tanggalValue);
+              if (!isNaN(date.getTime())) {
+                tanggal = date.toLocaleDateString("en-US", {
+                  month: "2-digit",
+                  day: "2-digit",
+                  year: "2-digit",
+                });
+              }
+            } catch (e) {
+              tanggal = "";
+            }
           }
+        }
+        
+        // Fallback: cek kolom Waktu terpisah jika ada
+        if (!waktu) {
+          if (data.Waktu || data.waktu || data.WAKTU) {
+            waktu = String(data.Waktu || data.waktu || data.WAKTU).trim();
+            // Jika format waktu menggunakan titik (12.00), ubah ke titik dua (12:00) untuk input
+            if (waktu.includes('.')) {
+              waktu = waktu.replace(/\./g, ':');
+            }
+          }
+        }
+        
+        // Default jika masih kosong
+        if (!tanggal) {
+          tanggal = new Date().toLocaleDateString("en-US", {
+            month: "2-digit",
+            day: "2-digit",
+            year: "2-digit",
+          });
         }
 
         // Tentukan status
@@ -223,7 +246,7 @@ export default function EditPenyiramanPage() {
       };
 
       const { error } = await supabase
-        .from("monitoring")
+        .from("penyiraman")
         .update(updateData)
         .eq("id", id);
 
