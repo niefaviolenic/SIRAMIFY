@@ -27,6 +27,7 @@ export default function RootLayout({
     <html lang="id">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        style={{ backgroundColor: '#fef7f5', minHeight: '100vh' }}
       >
         <RemoveNextJSLogo />
         {children}

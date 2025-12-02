@@ -2,32 +2,62 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/utils/supabaseClient";
 import Navbar from "../components/Navbar";
 
 const imgLogo1 = "https://www.figma.com/api/mcp/asset/3777a01f-7248-4b92-81c8-28d8ce86e840";
+const imgSimpleLineIconsEye = "https://www.figma.com/api/mcp/asset/41c50270-7e46-4013-8c2d-002f283e7fc9";
 const imgVector2 = "https://www.figma.com/api/mcp/asset/044ae3c8-2b69-4ea0-a2fc-094b22f6f72d";
 
-export default function LupaPasswordPage() {
-  const [email, setEmail] = useState("");
+export default function ResetPasswordPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    password: "",
+    confirmPassword: "",
+  });
+
+  useEffect(() => {
+    // Cek apakah ada hash di URL (dari email reset)
+    const hash = window.location.hash;
+    if (hash) {
+      // Supabase akan handle hash untuk reset password
+      console.log("Reset password hash detected");
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setIsLoading(true);
+    
+    if (formData.password !== formData.confirmPassword) {
+      alert("Password dan Konfirmasi Password tidak sama!");
+      return;
+    }
 
+    if (formData.password.length < 6) {
+      alert("Password minimal 6 karakter!");
+      return;
+    }
+
+    setIsLoading(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: `${window.location.origin}/reset-password`,
+      // Update password
+      const { error } = await supabase.auth.updateUser({
+        password: formData.password,
       });
 
       if (error) throw error;
 
-      alert("Link reset password telah dikirim ke email Anda! Silakan cek inbox Anda.");
+      alert("Password berhasil diubah! Silakan login dengan password baru.");
+      router.push("/masuk");
     } catch (error: any) {
-      console.error("Forgot password error:", error);
-      alert(error.message || "Terjadi kesalahan. Silakan coba lagi.");
+      console.error("Reset password error:", error);
+      alert(error.message || "Gagal mengubah password. Link mungkin sudah kadaluarsa. Silakan request reset password lagi.");
     } finally {
       setIsLoading(false);
     }
@@ -52,29 +82,76 @@ export default function LupaPasswordPage() {
             </div>
           </div>
 
-          {/* Forgot Password Form Card */}
+          {/* Reset Password Form Card */}
           <div className="w-full md:w-[340px] bg-[#eed2e1] border-2 border-[#9e1c60] rounded-[8px] p-4 shadow-lg">
             <h2 className="font-bold text-base md:text-lg text-[#561530] mb-3 md:mb-4">
-              Lupa Password
+              Reset Password
             </h2>
             <p className="text-xs text-[#561530] mb-4 md:mb-5">
-              Masukkan email Anda dan kami akan mengirimkan link untuk mereset password Anda.
+              Masukkan password baru Anda.
             </p>
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-2.5 md:gap-3">
-              {/* Email Field */}
+              {/* Password Field */}
               <div className="flex flex-col gap-1">
                 <label className="font-bold text-xs text-[#561530]">
-                  Email
+                  Password Baru
                 </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="niefa@gmail.com"
-                  className="bg-[#f5f5f5] h-[38px] md:h-[40px] px-3 py-2 rounded-[10px] w-full font-normal text-xs text-black/50 placeholder:text-black/50 focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
-                  required
-                />
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    placeholder="Masukkan Password Baru"
+                    className="bg-[#f5f5f5] h-[38px] md:h-[40px] px-3 pr-10 py-2 rounded-[10px] w-full font-normal text-xs text-black/50 placeholder:text-black/50 focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 flex items-center justify-center cursor-pointer hover:opacity-70 transition"
+                  >
+                    <Image
+                      src={imgSimpleLineIconsEye}
+                      alt={showPassword ? "Hide password" : "Show password"}
+                      width={14}
+                      height={14}
+                      className="object-contain"
+                      unoptimized
+                    />
+                  </button>
+                </div>
+              </div>
+
+              {/* Confirm Password Field */}
+              <div className="flex flex-col gap-1">
+                <label className="font-bold text-xs text-[#561530]">
+                  Konfirmasi Password Baru
+                </label>
+                <div className="relative">
+                  <input
+                    type={showConfirmPassword ? "text" : "password"}
+                    value={formData.confirmPassword}
+                    onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                    placeholder="Masukkan Konfirmasi Password"
+                    className="bg-[#f5f5f5] h-[38px] md:h-[40px] px-3 pr-10 py-2 rounded-[10px] w-full font-normal text-xs text-black/50 placeholder:text-black/50 focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 flex items-center justify-center cursor-pointer hover:opacity-70 transition"
+                  >
+                    <Image
+                      src={imgSimpleLineIconsEye}
+                      alt={showConfirmPassword ? "Hide password" : "Show password"}
+                      width={14}
+                      height={14}
+                      className="object-contain"
+                      unoptimized
+                    />
+                  </button>
+                </div>
               </div>
 
               {/* Submit Button */}
@@ -83,7 +160,7 @@ export default function LupaPasswordPage() {
                 disabled={isLoading}
                 className="bg-[#9e1c60] hover:bg-[#811844] transition text-white font-bold text-xs py-2 md:py-2.5 px-4 md:px-5 rounded-[10px] mt-1 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isLoading ? "Mengirim..." : "Kirim Link Reset"}
+                {isLoading ? "Mengubah..." : "Ubah Password"}
               </button>
             </form>
 
