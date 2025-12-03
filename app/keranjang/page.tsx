@@ -23,7 +23,9 @@ interface CartItem {
   };
 }
 
-export default function KeranjangPage() {
+import { Suspense } from "react";
+
+function KeranjangContent() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -347,5 +349,32 @@ export default function KeranjangPage() {
 
       <Footer />
     </div>
+  );
+}
+
+export default function KeranjangPage() {
+  return (
+    <Suspense fallback={
+      <div className="bg-white relative w-full min-h-screen overflow-x-hidden font-sans flex flex-col">
+        <Navbar />
+        <div className="pt-32 pb-20 px-6 md:px-8 lg:px-10 max-w-[1200px] mx-auto w-full flex-1 animate-pulse">
+          <div className="h-8 w-48 bg-gray-200 rounded mb-8"></div>
+          <div className="flex flex-col lg:flex-row gap-8 lg:gap-12">
+            <div className="flex-1 flex flex-col gap-6">
+              <div className="h-10 w-full bg-gray-200 rounded"></div>
+              {[1, 2].map((i) => (
+                <div key={i} className="h-32 w-full bg-gray-200 rounded-xl"></div>
+              ))}
+            </div>
+            <div className="w-full lg:w-[350px] shrink-0">
+              <div className="h-64 w-full bg-gray-200 rounded-2xl"></div>
+            </div>
+          </div>
+        </div>
+        <Footer />
+      </div>
+    }>
+      <KeranjangContent />
+    </Suspense>
   );
 }
