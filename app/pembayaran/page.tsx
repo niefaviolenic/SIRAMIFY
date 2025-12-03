@@ -19,7 +19,9 @@ interface CartItem {
   };
 }
 
-export default function PembayaranPage() {
+import { Suspense } from "react";
+
+function PembayaranContent() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -388,5 +390,57 @@ export default function PembayaranPage() {
 
       <Footer />
     </div>
+  );
+}
+
+export default function PembayaranPage() {
+  return (
+    <Suspense fallback={
+      <div className="bg-white min-h-screen flex flex-col font-sans">
+        <Navbar />
+        <div className="pt-32 pb-20 px-6 md:px-8 lg:px-10 max-w-[800px] mx-auto w-full flex-1 animate-pulse">
+          {/* Title Skeleton */}
+          <div className="h-8 w-48 bg-gray-200 rounded mx-auto mb-8"></div>
+
+          <div className="bg-white p-6 md:p-8 rounded-2xl border border-[#E0E0E0] shadow-sm">
+            {/* Shipping Form Skeleton */}
+            <div className="mb-8">
+              <div className="h-6 w-40 bg-gray-200 rounded mb-4"></div>
+              <div className="flex flex-col gap-4">
+                {[1, 2, 3].map((i) => (
+                  <div key={i}>
+                    <div className="h-4 w-32 bg-gray-200 rounded mb-2"></div>
+                    <div className="h-10 w-full bg-gray-200 rounded-lg"></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Order Summary Skeleton */}
+            <div className="mb-8">
+              <div className="h-6 w-40 bg-gray-200 rounded mb-4"></div>
+              <div className="space-y-3">
+                {[1, 2].map((i) => (
+                  <div key={i} className="flex justify-between">
+                    <div className="h-5 w-1/2 bg-gray-200 rounded"></div>
+                    <div className="h-5 w-24 bg-gray-200 rounded"></div>
+                  </div>
+                ))}
+                <div className="border-t border-gray-100 pt-3 mt-3 flex justify-between items-center">
+                  <div className="h-6 w-24 bg-gray-200 rounded"></div>
+                  <div className="h-7 w-32 bg-gray-200 rounded"></div>
+                </div>
+              </div>
+            </div>
+
+            {/* Button Skeleton */}
+            <div className="h-14 w-full bg-gray-200 rounded-xl"></div>
+          </div>
+        </div>
+        <Footer />
+      </div>
+    }>
+      <PembayaranContent />
+    </Suspense>
   );
 }
