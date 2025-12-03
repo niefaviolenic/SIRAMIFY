@@ -100,79 +100,137 @@ export default function PenyiramanPage() {
       console.log("Loading records for user:", user.id);
       console.log("Current page:", currentPage);
 
-      // Hitung total records untuk pagination (SEMUA DATA, tanpa filter user_id)
-      const { count, error: countError } = await supabase
-        .from("penyiraman")
-        .select("*", { count: "exact", head: true });
-
-      console.log("=== COUNT QUERY ===");
-      console.log("Count result (ALL DATA):", count);
-      console.log("Count error:", countError);
-
-      if (countError) {
-        console.error("Error counting records:", countError);
-        setTotalRecords(0);
-      } else {
-        setTotalRecords(count || 0);
-        console.log("Total records in table:", count);
-      }
-
-      // Hitung offset untuk pagination
-      const from = (currentPage - 1) * itemsPerPage;
-      const to = from + itemsPerPage - 1;
+      // Count akan diambil di dalam fetch loop, jadi tidak perlu query terpisah di sini
 
       console.log("=== FETCHING DATA ===");
       console.log("Page:", currentPage);
       console.log("Items per page:", itemsPerPage);
-      console.log("Range:", from, "to", to);
 
-      // Ambil data dari tabel penyiraman di Supabase (SEMUA DATA, tanpa filter user_id) dengan pagination
-      // Gunakan select("*") untuk mengambil semua kolom yang ada
-      const { data, error } = await supabase
+      // Ambil SEMUA data dari tabel penyiraman (tanpa pagination di query)
+      // Karena kolom Tanggal adalah TEXT, sorting di database tidak akurat
+      // Kita akan sort di JavaScript setelah parsing tanggal
+      // Supabase default limit adalah 1000, jadi kita perlu fetch dalam batch
+      
+      // Pertama, ambil count untuk tahu berapa banyak data
+      const { count, error: countError } = await supabase
         .from("penyiraman")
-        .select("*")
-        .order("id", { ascending: false })
-        .range(from, to);
+        .select("*", { count: "exact", head: true });
+      
+      if (countError) {
+        console.error("Error counting records:", countError);
+        alert("Error loading data: " + countError.message);
+        setRecords([]);
+        setIsLoading(false);
+        return;
+      }
+      
+      console.log("Total records in database:", count);
+      
+      // Fetch semua data dalam batch (1000 per batch)
+      let allData: any[] = [];
+      const batchSize = 1000;
+      const totalBatches = count ? Math.ceil(count / batchSize) : 1;
+      
+      for (let i = 0; i < totalBatches; i++) {
+        const from = i * batchSize;
+        const to = Math.min((i + 1) * batchSize - 1, (count || 0) - 1);
+        
+        console.log(`Fetching batch ${i + 1}/${totalBatches}: ${from} to ${to}`);
+        
+        const { data: batchData, error } = await supabase
+          .from("penyiraman")
+          .select("*")
+          .range(from, to);
+        
+        if (error) {
+          console.error(`Error fetching batch ${i + 1}:`, error);
+          break;
+        }
+        
+        if (batchData) {
+          allData = [...allData, ...batchData];
+          console.log(`Batch ${i + 1} fetched: ${batchData.length} records. Total so far: ${allData.length}`);
+        }
+      }
+      
+      console.log("Total data fetched:", allData.length);
 
       console.log("=== QUERY RESULT ===");
       console.log("Fetching ALL data (no user_id filter)");
-      console.log("Data received:", data);
-      console.log("Data length:", data?.length);
-      console.log("Error:", error);
-
-      // Debug: Cek apakah ada RLS policy yang memblokir
-      if (error) {
-        console.error("Supabase error:", error);
-        console.error("Error details:", {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code
-        });
-
-        // Jika error terkait RLS/permission
-        if (error.code === 'PGRST301' || error.message?.includes('permission') || error.message?.includes('policy')) {
-          console.error("⚠️ RLS Policy Issue: Tabel penyiraman mungkin memiliki Row Level Security yang memblokir akses.");
-          console.error("💡 Solusi: Di Supabase, buka tabel penyiraman > Settings > Disable RLS atau buat policy yang mengizinkan SELECT untuk authenticated users");
-        }
-
-        alert("Error loading data: " + error.message);
-        setRecords([]);
-        return;
+      console.log("Data received:", allData);
+      console.log("Data length:", allData?.length);
+      
+      // Set total records dari count atau allData length
+      if (count !== null && count !== undefined) {
+        setTotalRecords(count);
+        console.log("Total records set from count:", count);
+      } else {
+        setTotalRecords(allData.length);
+        console.log("Total records set from data length:", allData.length);
       }
 
-      // Jika tidak ada error tapi data kosong, kemungkinan RLS memblokir
-      if (!error && (!data || data.length === 0)) {
+      // Jika tidak ada data, kemungkinan RLS memblokir
+      if (!allData || allData.length === 0) {
         console.warn("⚠️ Query berhasil tapi tidak ada data. Kemungkinan:");
         console.warn("1. RLS Policy memblokir akses - cek di Supabase Table Editor > Settings");
         console.warn("2. Tabel memang kosong - cek langsung di Supabase");
         console.warn("3. Kolom id tidak ada atau berbeda - cek struktur tabel");
+        setRecords([]);
+        setIsLoading(false);
+        return;
       }
 
-      console.log("Data received:", data);
+      if (allData && allData.length > 0) {
+        // Helper function untuk parse tanggal dari format "DD/MM/YYYY HH:MM" menjadi Date object
+        const parseTanggalToDate = (tanggalValue: string): Date => {
+          try {
+            const parts = tanggalValue.toString().trim().split(" ");
+            if (parts.length >= 1) {
+              const datePart = parts[0]; // "DD/MM/YYYY"
+              const dateParts = datePart.split("/");
+              if (dateParts.length === 3) {
+                const day = parseInt(dateParts[0]);
+                const month = parseInt(dateParts[1]) - 1; // Month is 0-indexed
+                const year = parseInt(dateParts[2]);
+                return new Date(year, month, day);
+              }
+            }
+          } catch (e) {
+            console.error("Error parsing date:", e);
+          }
+          return new Date(0); // Return epoch if parsing fails
+        };
 
-      if (data && data.length > 0) {
-        console.log("Raw data from Supabase:", data);
+        // Sort semua data berdasarkan tanggal (terbaru ke terlama)
+        const sortedData = [...allData].sort((a: any, b: any) => {
+          const tanggalA = a.Tanggal || a.tanggal || a.TANGGAL || "";
+          const tanggalB = b.Tanggal || b.tanggal || b.TANGGAL || "";
+          const dateA = parseTanggalToDate(tanggalA);
+          const dateB = parseTanggalToDate(tanggalB);
+          return dateB.getTime() - dateA.getTime(); // Descending: terbaru dulu
+        });
+
+        // Apply pagination setelah sorting
+        const from = (currentPage - 1) * itemsPerPage;
+        const to = from + itemsPerPage;
+        const data = sortedData.slice(from, to);
+
+        console.log("Sorted data (first 5 - terbaru):", sortedData.slice(0, 5).map((d: any) => d.Tanggal || d.tanggal || d.TANGGAL));
+        console.log("Sorted data (last 5 - terlama):", sortedData.slice(-5).map((d: any) => d.Tanggal || d.tanggal || d.TANGGAL));
+        console.log("Pagination: showing items", from, "to", to - 1, "of", sortedData.length);
+        console.log("Total records:", sortedData.length);
+        
+        // Set total records dari sorted data
+        setTotalRecords(sortedData.length);
+        
+        // Verify: data terbaru harus tanggal 7
+        if (sortedData.length > 0) {
+          const firstRecord = sortedData[0];
+          const firstTanggal = firstRecord.Tanggal || firstRecord.tanggal || firstRecord.TANGGAL;
+          console.log("✅ Data terbaru di halaman awal (harusnya tanggal 7):", firstTanggal);
+        }
+        
+        console.log("Raw data from Supabase (paginated):", data);
         // Map data dari Supabase
         const mappedRecords = data.map((item: any, index: number) => {
           console.log("Processing item:", item);
@@ -297,8 +355,31 @@ export default function PenyiramanPage() {
         setRecords(mappedRecords);
 
         // Load ML prediction hanya untuk record terbaru (untuk card)
-        if (mappedRecords.length > 0) {
-          loadMLPrediction(mappedRecords[0]);
+        // Karena data sekarang urut dari terbaru ke terlama, ambil record pertama
+        if (sortedData.length > 0) {
+          const latestRecord = sortedData[0];
+          // Parse latest record untuk ML prediction
+          const tanggalValue = latestRecord.Tanggal || latestRecord.tanggal || latestRecord.TANGGAL;
+          const parts = tanggalValue?.toString().trim().split(" ") || [];
+          let tanggal = "";
+          let waktu = "";
+          if (parts.length >= 2) {
+            const datePart = parts[0];
+            const dateParts = datePart.split("/");
+            if (dateParts.length === 3) {
+              tanggal = `${dateParts[0]}/${dateParts[1]}/${dateParts[2]}`;
+            }
+            waktu = parts[1].replace(":", ".");
+          }
+          const latestRecordParsed = {
+            id: latestRecord.id || latestRecord.Id || latestRecord.ID,
+            tanggal,
+            waktu,
+            suhu: latestRecord.Suhu || latestRecord.suhu || latestRecord.SUHU || 0,
+            kelembapan: latestRecord.Kelembapan || latestRecord.kelembapan || latestRecord.KELEMBAPAN || 0,
+            status: "Normal" as "Kering" | "Normal" | "Basah",
+          };
+          loadMLPrediction(latestRecordParsed);
         }
       } else {
         // Jika tidak ada data, tampilkan array kosong dan reset prediksi
@@ -390,11 +471,41 @@ export default function PenyiramanPage() {
 
   const exportToCSV = async () => {
     try {
-      // Ambil semua data tanpa pagination
-      const { data, error } = await supabase
+      // Ambil semua data tanpa pagination (tanpa sorting di database karena Tanggal adalah TEXT)
+      // Supabase default limit adalah 1000, jadi kita perlu set limit yang lebih besar
+      const { data: allData, error } = await supabase
         .from("penyiraman")
         .select("*")
-        .order("id", { ascending: false });
+        .limit(10000); // Set limit besar untuk mengambil semua data
+
+      // Helper function untuk parse tanggal dari format "DD/MM/YYYY HH:MM" menjadi Date object
+      const parseTanggalToDate = (tanggalValue: string): Date => {
+        try {
+          const parts = tanggalValue?.toString().trim().split(" ") || [];
+          if (parts.length >= 1) {
+            const datePart = parts[0]; // "DD/MM/YYYY"
+            const dateParts = datePart.split("/");
+            if (dateParts.length === 3) {
+              const day = parseInt(dateParts[0]);
+              const month = parseInt(dateParts[1]) - 1; // Month is 0-indexed
+              const year = parseInt(dateParts[2]);
+              return new Date(year, month, day);
+            }
+          }
+        } catch (e) {
+          console.error("Error parsing date:", e);
+        }
+        return new Date(0); // Return epoch if parsing fails
+      };
+
+      // Sort data berdasarkan tanggal (terbaru ke terlama)
+      const data = allData ? [...allData].sort((a: any, b: any) => {
+        const tanggalA = a.Tanggal || a.tanggal || a.TANGGAL || "";
+        const tanggalB = b.Tanggal || b.tanggal || b.TANGGAL || "";
+        const dateA = parseTanggalToDate(tanggalA);
+        const dateB = parseTanggalToDate(tanggalB);
+        return dateB.getTime() - dateA.getTime(); // Descending: terbaru dulu
+      }) : [];
 
       if (error) {
         console.error("Error fetching data for export:", error);
@@ -556,12 +667,12 @@ export default function PenyiramanPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#fef7f5] flex">
+    <div className="min-h-screen bg-white flex">
       {/* Sidebar */}
       <PetaniSidebar />
 
       {/* Main Content */}
-      <div className="flex-1 ml-[200px] min-h-screen bg-[#fef7f5]" style={{ minHeight: '100vh', width: 'calc(100% - 180px)', paddingBottom: '40px' }}>
+      <div className="flex-1 ml-[200px] min-h-screen bg-white" style={{ minHeight: '100vh', width: 'calc(100% - 180px)', paddingBottom: '40px' }}>
         <div className="p-8" style={{ paddingLeft: '10px' }}>
           {/* Header */}
           <div className="mb-8">
@@ -626,7 +737,7 @@ export default function PenyiramanPage() {
           {/* Prediction Cards */}
           <div className="mb-4 flex gap-4 flex-wrap">
             {/* Prediksi Suhu Card */}
-            <div className="border border-[#9e1c60] rounded-[10px] p-4 bg-white flex-1 min-w-[200px]">
+            <div className="border border-[#9e1c60] rounded-[10px] p-4 flex-1 min-w-[200px]" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)' }}>
               <p className="text-black mb-2" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
                 Prediksi Suhu
               </p>
@@ -640,7 +751,7 @@ export default function PenyiramanPage() {
             </div>
 
             {/* Prediksi Kelembapan Card */}
-            <div className="border border-[#9e1c60] rounded-[10px] p-4 bg-white flex-1 min-w-[200px]">
+            <div className="border border-[#9e1c60] rounded-[10px] p-4 flex-1 min-w-[200px]" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)' }}>
               <p className="text-black mb-2" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
                 Prediksi Kelembapan
               </p>
@@ -651,6 +762,48 @@ export default function PenyiramanPage() {
                     ? "Loading..."
                     : "N/A"}
               </p>
+            </div>
+
+            {/* Status Ideal Card */}
+            <div className={`border rounded-[10px] p-4 flex-1 min-w-[200px] ${
+              latestPrediction.prediksiKelembapan !== null && latestPrediction.prediksiKelembapan !== undefined
+                ? (latestPrediction.prediksiKelembapan >= 55)
+                  ? "border-[#9e1c60]"
+                  : "border-[#ff9500]"
+                : "border-[#9e1c60]"
+            }`} style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)' }}>
+              <p className="text-black mb-2" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                Status Ideal
+              </p>
+              {isLoading ? (
+                <p className="font-bold text-black" style={{ fontSize: '20px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                  Loading...
+                </p>
+              ) : latestPrediction.prediksiKelembapan !== null && latestPrediction.prediksiKelembapan !== undefined ? (
+                (latestPrediction.prediksiKelembapan >= 55) ? (
+                  <div>
+                    <p className="font-bold" style={{ fontSize: '20px', fontFamily: 'Arial, Helvetica, sans-serif', color: '#106113' }}>
+                      Ideal
+                    </p>
+                    <p className="text-black text-[10px] mt-1" style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                      Tidak perlu penyiraman
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="font-bold" style={{ fontSize: '20px', fontFamily: 'Arial, Helvetica, sans-serif', color: '#dc2626' }}>
+                      Tidak Ideal
+                    </p>
+                    <p className="text-black text-[10px] mt-1" style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                      Perlu penyiraman
+                    </p>
+                  </div>
+                )
+              ) : (
+                <p className="font-bold text-black" style={{ fontSize: '20px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                  N/A
+                </p>
+              )}
             </div>
           </div>
 
@@ -779,7 +932,6 @@ export default function PenyiramanPage() {
                     className={currentPage === 1 ? "px-3 py-1 rounded-[10px] cursor-not-allowed pointer-events-none" : "px-3 py-1 rounded-[10px] border-2 border-[#9e1c60] text-[#9e1c60] hover:bg-[#9e1c60] hover:text-white transition"}
                     style={{
                       fontSize: '12px',
-                      borderWidth: '2px',
                       ...(currentPage === 1 ? {
                         border: '2px solid #a8a8a8',
                         background: '#c0c0c0',
@@ -803,7 +955,6 @@ export default function PenyiramanPage() {
                     className={currentPage >= Math.ceil(totalRecords / itemsPerPage) ? "px-3 py-1 rounded-[10px] cursor-not-allowed pointer-events-none" : "px-3 py-1 rounded-[10px] border-2 border-[#9e1c60] text-[#9e1c60] hover:bg-[#9e1c60] hover:text-white transition"}
                     style={{
                       fontSize: '12px',
-                      borderWidth: '2px',
                       ...(currentPage >= Math.ceil(totalRecords / itemsPerPage) ? {
                         border: '2px solid #a8a8a8',
                         background: '#c0c0c0',

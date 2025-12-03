@@ -16,9 +16,6 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Siramify - Sistem Penyiraman Otomatis",
   description: "Siramify adalah sistem penyiraman otomatis berbasis web yang membantu petani menjaga tanaman tetap sehat dan efisien dalam penggunaan air.",
-  icons: {
-    icon: '/favicon.ico',
-  },
 };
 
 export default function RootLayout({

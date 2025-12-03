@@ -37,6 +37,7 @@ export default function BerandaPage() {
   } | null>(null);
   const [isLoadingPrediction, setIsLoadingPrediction] = useState(false);
   const [mlError, setMlError] = useState<string | null>(null);
+  const [chartData, setChartData] = useState<MonitoringData[]>([]);
 
   useEffect(() => {
     loadUserData();
@@ -68,21 +69,144 @@ export default function BerandaPage() {
   const loadMonitoringData = async () => {
     try {
       setIsLoading(true);
-      // Ambil data terbaru dari tabel penyiraman
-      const { data, error } = await supabase
+      // Ambil semua data untuk sorting yang benar (karena Tanggal adalah TEXT)
+      // Supabase default limit adalah 1000, jadi kita perlu fetch dalam batch
+      
+      // Pertama, ambil count
+      const { count, error: countError } = await supabase
         .from("penyiraman")
-        .select("*")
-        .order("id", { ascending: false })
-        .limit(1);
+        .select("*", { count: "exact", head: true });
+      
+      if (countError) {
+        console.error("Error counting records:", countError);
+        setIsLoading(false);
+        return;
+      }
+      
+      // Fetch semua data dalam batch (1000 per batch)
+      let allData: any[] = [];
+      const batchSize = 1000;
+      const totalBatches = count ? Math.ceil(count / batchSize) : 1;
+      
+      for (let i = 0; i < totalBatches; i++) {
+        const from = i * batchSize;
+        const to = Math.min((i + 1) * batchSize - 1, (count || 0) - 1);
+        
+        const { data: batchData, error: batchError } = await supabase
+          .from("penyiraman")
+          .select("*")
+          .range(from, to);
+        
+        if (batchError) {
+          console.error(`Error fetching batch ${i + 1}:`, batchError);
+          break;
+        }
+        
+        if (batchData) {
+          allData = [...allData, ...batchData];
+        }
+      }
+      
+      console.log("Total data fetched for beranda:", allData.length);
+      
+      const latestError = null; // Error sudah di-handle di dalam loop
 
-      if (error) {
-        console.error("Error loading monitoring data:", error);
+      // Helper function untuk parse tanggal dari format "DD/MM/YYYY HH:MM" menjadi Date object
+      const parseTanggalToDate = (tanggalValue: string): Date => {
+        try {
+          const parts = tanggalValue?.toString().trim().split(" ") || [];
+          if (parts.length >= 1) {
+            const datePart = parts[0]; // "DD/MM/YYYY"
+            const dateParts = datePart.split("/");
+            if (dateParts.length === 3) {
+              const day = parseInt(dateParts[0]);
+              const month = parseInt(dateParts[1]) - 1; // Month is 0-indexed
+              const year = parseInt(dateParts[2]);
+              return new Date(year, month, day);
+            }
+          }
+        } catch (e) {
+          console.error("Error parsing date:", e);
+        }
+        return new Date(0); // Return epoch if parsing fails
+      };
+
+      // Sort semua data berdasarkan tanggal
+      let sortedData: any[] = [];
+      let latestData: any[] = [];
+      let chartDataRaw: any[] = [];
+
+      if (allData && allData.length > 0) {
+        sortedData = [...allData].sort((a: any, b: any) => {
+          const tanggalA = a.Tanggal || a.tanggal || a.TANGGAL || "";
+          const tanggalB = b.Tanggal || b.tanggal || b.TANGGAL || "";
+          const dateA = parseTanggalToDate(tanggalA);
+          const dateB = parseTanggalToDate(tanggalB);
+          return dateB.getTime() - dateA.getTime(); // Descending: terbaru ke terlama
+        });
+
+        // Data terbaru untuk card (pertama dari sorted data karena terbaru dulu)
+        latestData = sortedData.length > 0 ? [sortedData[0]] : [];
+
+        // Group data berdasarkan tanggal dan hitung rata-rata
+        const dataByTanggal = new Map<string, { suhu: number[], kelembapan: number[], tanggal: string }>();
+        
+        sortedData.forEach((item: any) => {
+          const tanggalValue = item.Tanggal || item.tanggal || item.TANGGAL || "";
+          if (tanggalValue) {
+            // Ambil hanya bagian tanggal (DD/MM/YYYY) tanpa waktu
+            const parts = tanggalValue.toString().trim().split(" ");
+            const datePart = parts[0]; // "DD/MM/YYYY"
+            
+            if (datePart) {
+              const suhuValue = item.Suhu || item.suhu || item.SUHU || 0;
+              const kelembapanValue = item.Kelembapan || item.kelembapan || item.KELEMBAPAN || 0;
+              
+              if (!dataByTanggal.has(datePart)) {
+                dataByTanggal.set(datePart, { suhu: [], kelembapan: [], tanggal: datePart });
+              }
+              
+              const existing = dataByTanggal.get(datePart)!;
+              existing.suhu.push(suhuValue);
+              existing.kelembapan.push(kelembapanValue);
+            }
+          }
+        });
+        
+        // Hitung rata-rata untuk setiap tanggal
+        const averagedData = Array.from(dataByTanggal.values()).map((group) => {
+          const avgSuhu = group.suhu.reduce((sum, val) => sum + val, 0) / group.suhu.length;
+          const avgKelembapan = group.kelembapan.reduce((sum, val) => sum + val, 0) / group.kelembapan.length;
+          
+          return {
+            tanggal: group.tanggal,
+            suhu: avgSuhu,
+            kelembapan: avgKelembapan,
+            status: "Normal" as "Kering" | "Normal" | "Basah", // Status akan dihitung nanti
+          };
+        });
+        
+        // Sort berdasarkan tanggal (terlama ke terbaru) untuk grafik
+        const sortedAveragedData = averagedData.sort((a, b) => {
+          const dateA = parseTanggalToDate(a.tanggal);
+          const dateB = parseTanggalToDate(b.tanggal);
+          return dateA.getTime() - dateB.getTime(); // Ascending: terlama ke terbaru
+        });
+        
+        // Ambil 7 tanggal terbaru (atau semua jika kurang dari 7)
+        chartDataRaw = sortedAveragedData.slice(-7);
+      }
+
+      if (latestError) {
+        console.error("Error loading monitoring data:", latestError);
         setIsLoading(false);
         return;
       }
 
-      if (data && data.length > 0) {
-        const item = data[0];
+      // chartError tidak lagi digunakan karena kita fetch semua data sekaligus
+
+      if (latestData && latestData.length > 0) {
+        const item = latestData[0];
         const suhuValue = item.Suhu || item.suhu || item.SUHU || 0;
         const kelembapanValue = item.Kelembapan || item.kelembapan || item.KELEMBAPAN || 0;
         
@@ -101,6 +225,37 @@ export default function BerandaPage() {
           kelembapan: kelembapanValue,
           status: status,
         });
+      }
+
+      // Process chart data
+      // Data sudah di-aggregate per tanggal dengan rata-rata
+      if (chartDataRaw && chartDataRaw.length > 0) {
+        const processedChartData = chartDataRaw.map((item: any) => {
+          const suhuValue = item.suhu || 0;
+          const kelembapanValue = item.kelembapan || 0;
+          
+          // Format tanggal untuk display (DD/MM)
+          const dateParts = item.tanggal.split("/");
+          const tanggal = dateParts.length === 3 ? `${dateParts[0]}/${dateParts[1]}` : item.tanggal;
+
+          // Tentukan status berdasarkan rata-rata kelembapan
+          let status: "Kering" | "Normal" | "Basah" = "Normal";
+          if (kelembapanValue < 55) {
+            status = "Kering";
+          } else if (kelembapanValue >= 55 && kelembapanValue < 70) {
+            status = "Normal";
+          } else {
+            status = "Basah";
+          }
+
+          return {
+            tanggal,
+            suhu: suhuValue,
+            kelembapan: kelembapanValue,
+            status,
+          };
+        });
+        setChartData(processedChartData);
       }
     } catch (error) {
       console.error("Error loading monitoring data:", error);
@@ -165,13 +320,221 @@ export default function BerandaPage() {
     return "#3b82f6";
   };
 
+  // Realtime Sensor Chart Component
+  const RealtimeSensorChart = ({ data }: { data: MonitoringData[] }) => {
+    if (data.length === 0) {
+      return (
+        <div>
+          <h3 className="font-bold text-black mb-4" style={{ fontSize: '18px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+            Grafik Sensor Realtime
+          </h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="rounded-[15px] p-6 shadow-lg flex items-center justify-center h-[300px]" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}>
+              <p className="text-gray-500" style={{ fontSize: '14px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                Belum ada data
+              </p>
+            </div>
+            <div className="rounded-[15px] p-6 shadow-lg flex items-center justify-center h-[300px]" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}>
+              <p className="text-gray-500" style={{ fontSize: '14px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                Belum ada data
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const width = 400;
+    const height = 250;
+    const padding = { top: 20, right: 20, bottom: 40, left: 50 };
+    const chartWidth = width - padding.left - padding.right;
+    const chartHeight = height - padding.top - padding.bottom;
+
+    // Suhu Chart
+    const suhuValues = data.map(d => d.suhu);
+    const suhuMax = Math.max(...suhuValues, 1);
+    const suhuMin = Math.min(...suhuValues, 0);
+    const suhuRange = suhuMax - suhuMin || 1;
+    const suhuStep = suhuRange / 8; // 8 grid lines
+    const suhuYLabels = Array.from({ length: 9 }, (_, i) => suhuMin + (i * suhuStep));
+
+    const suhuPoints = suhuValues.map((value, index) => {
+      const x = padding.left + (index / (data.length - 1 || 1)) * chartWidth;
+      const y = padding.top + chartHeight - ((value - suhuMin) / suhuRange) * chartHeight;
+      return { x, y };
+    });
+
+    const suhuLinePath = suhuPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+    const suhuAreaPath = `${suhuLinePath} L ${suhuPoints[suhuPoints.length - 1].x} ${padding.top + chartHeight} L ${suhuPoints[0].x} ${padding.top + chartHeight} Z`;
+
+    // Kelembapan Chart
+    const kelembapanValues = data.map(d => d.kelembapan);
+    const kelembapanMax = Math.max(...kelembapanValues, 1);
+    const kelembapanMin = Math.min(...kelembapanValues, 0);
+    const kelembapanRange = kelembapanMax - kelembapanMin || 1;
+    const kelembapanStep = Math.ceil(kelembapanRange / 8 / 5) * 5; // Round to nearest 5
+    const kelembapanYLabels = Array.from({ length: 9 }, (_, i) => {
+      const value = kelembapanMin + (i * kelembapanStep);
+      return Math.round(value / 5) * 5; // Round to nearest 5
+    });
+
+    const kelembapanPoints = kelembapanValues.map((value, index) => {
+      const x = padding.left + (index / (data.length - 1 || 1)) * chartWidth;
+      const y = padding.top + chartHeight - ((value - kelembapanMin) / kelembapanRange) * chartHeight;
+      return { x, y };
+    });
+
+    const kelembapanLinePath = kelembapanPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+    const kelembapanAreaPath = `${kelembapanLinePath} L ${kelembapanPoints[kelembapanPoints.length - 1].x} ${padding.top + chartHeight} L ${kelembapanPoints[0].x} ${padding.top + chartHeight} Z`;
+
+    // Color palette - ungu
+    const purpleDark = "#9e1c60";
+    const purpleLight = "#e6c4d2";
+    const purpleGrid = "#d4a5c4";
+
+    return (
+      <div>
+        <h3 className="font-bold text-black mb-4" style={{ fontSize: '18px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+          Grafik Sensor Realtime
+        </h3>
+        <div className="grid grid-cols-2 gap-4">
+          {/* Suhu Chart */}
+          <div className="rounded-[15px] p-4 shadow-lg" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}>
+            <h4 className="font-bold mb-3" style={{ fontSize: '14px', fontFamily: 'Arial, Helvetica, sans-serif', color: purpleDark }}>
+              Suhu (°C)
+            </h4>
+            <svg width={width} height={height} className="w-full">
+              {/* Grid lines */}
+              {suhuYLabels.map((label, i) => {
+                const y = padding.top + chartHeight - ((label - suhuMin) / suhuRange) * chartHeight;
+                return (
+                  <g key={i}>
+                    <line
+                      x1={padding.left}
+                      y1={y}
+                      x2={width - padding.right}
+                      y2={y}
+                      stroke={purpleGrid}
+                      strokeWidth="1"
+                    />
+                    <text
+                      x={padding.left - 10}
+                      y={y + 4}
+                      textAnchor="end"
+                      style={{ fontSize: '10px', fontFamily: 'Arial, Helvetica, sans-serif', fill: purpleDark }}
+                    >
+                      {label.toFixed(1)}
+                    </text>
+                  </g>
+                );
+              })}
+              {/* X-axis labels */}
+              {data.map((d, i) => {
+                const x = padding.left + (i / (data.length - 1 || 1)) * chartWidth;
+                return (
+                  <text
+                    key={i}
+                    x={x}
+                    y={height - 10}
+                    textAnchor="middle"
+                    style={{ fontSize: '9px', fontFamily: 'Arial, Helvetica, sans-serif', fill: purpleDark }}
+                  >
+                    {d.tanggal}
+                  </text>
+                );
+              })}
+              {/* Area fill */}
+              <path
+                d={suhuAreaPath}
+                fill={purpleLight}
+                opacity="0.6"
+              />
+              {/* Line */}
+              <path
+                d={suhuLinePath}
+                fill="none"
+                stroke={purpleDark}
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </div>
+
+          {/* Kelembapan Chart */}
+          <div className="rounded-[15px] p-4 shadow-lg" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}>
+            <h4 className="font-bold mb-3" style={{ fontSize: '14px', fontFamily: 'Arial, Helvetica, sans-serif', color: purpleDark }}>
+              Kelembapan (%)
+            </h4>
+            <svg width={width} height={height} className="w-full">
+              {/* Grid lines */}
+              {kelembapanYLabels.map((label, i) => {
+                const y = padding.top + chartHeight - ((label - kelembapanMin) / kelembapanRange) * chartHeight;
+                return (
+                  <g key={i}>
+                    <line
+                      x1={padding.left}
+                      y1={y}
+                      x2={width - padding.right}
+                      y2={y}
+                      stroke={purpleGrid}
+                      strokeWidth="1"
+                    />
+                    <text
+                      x={padding.left - 10}
+                      y={y + 4}
+                      textAnchor="end"
+                      style={{ fontSize: '10px', fontFamily: 'Arial, Helvetica, sans-serif', fill: purpleDark }}
+                    >
+                      {label}
+                    </text>
+                  </g>
+                );
+              })}
+              {/* X-axis labels */}
+              {data.map((d, i) => {
+                const x = padding.left + (i / (data.length - 1 || 1)) * chartWidth;
+                return (
+                  <text
+                    key={i}
+                    x={x}
+                    y={height - 10}
+                    textAnchor="middle"
+                    style={{ fontSize: '9px', fontFamily: 'Arial, Helvetica, sans-serif', fill: purpleDark }}
+                  >
+                    {d.tanggal}
+                  </text>
+                );
+              })}
+              {/* Area fill */}
+              <path
+                d={kelembapanAreaPath}
+                fill={purpleLight}
+                opacity="0.6"
+              />
+              {/* Line */}
+              <path
+                d={kelembapanLinePath}
+                fill="none"
+                stroke={purpleDark}
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div className="min-h-screen bg-[#fef7f5] flex">
+    <div className="min-h-screen bg-white flex">
       {/* Sidebar */}
       <PetaniSidebar />
 
       {/* Main Content */}
-      <div className="flex-1 ml-[200px] min-h-screen bg-[#fef7f5]" style={{ minHeight: '100vh', width: 'calc(100% - 180px)', paddingBottom: '40px' }}>
+      <div className="flex-1 ml-[200px] min-h-screen bg-white" style={{ minHeight: '100vh', width: 'calc(100% - 180px)', paddingBottom: '40px' }}>
         <div className="p-8" style={{ paddingLeft: '10px' }}>
           {/* Header */}
           <div className="mb-8">
@@ -227,7 +590,7 @@ export default function BerandaPage() {
             <div className="rounded-[15px] p-5 relative shadow-lg hover:shadow-xl transition-all duration-300" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}>
               <div className="flex items-start justify-between mb-3">
                 <div className="flex-1">
-                  <p className="text-gray-600 mb-1" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>Suhu</p>
+                  <p className="text-black mb-1" style={{ fontSize: '16px', fontFamily: 'Arial, Helvetica, sans-serif' }}>Suhu</p>
                   {isLoading ? (
                     <p className="text-gray-400" style={{ fontSize: '14px', fontFamily: 'Arial, Helvetica, sans-serif' }}>Memuat...</p>
                   ) : (
@@ -239,9 +602,10 @@ export default function BerandaPage() {
                 <Image
                   src={imgOuiTemperature}
                   alt="Temperature"
-                  width={48}
-                  height={48}
-                  className="object-contain opacity-70"
+                  width={40}
+                  height={40}
+                  className="object-contain"
+                  style={{ filter: 'brightness(0) saturate(100%) invert(15%) sepia(90%) saturate(5000%) hue-rotate(310deg) brightness(0.6) contrast(1.2)' }}
                   unoptimized
                 />
               </div>
@@ -251,7 +615,7 @@ export default function BerandaPage() {
             <div className="rounded-[15px] p-5 relative shadow-lg hover:shadow-xl transition-all duration-300" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}>
               <div className="flex items-start justify-between mb-3">
                 <div className="flex-1">
-                  <p className="text-gray-600 mb-1" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>Kelembapan</p>
+                  <p className="text-black mb-1" style={{ fontSize: '16px', fontFamily: 'Arial, Helvetica, sans-serif' }}>Kelembapan</p>
                   {isLoading ? (
                     <p className="text-gray-400" style={{ fontSize: '14px', fontFamily: 'Arial, Helvetica, sans-serif' }}>Memuat...</p>
                   ) : (
@@ -263,21 +627,22 @@ export default function BerandaPage() {
                 <Image
                   src={imgMaterialSymbolsHumidityPercentageOutlineRounded}
                   alt="Humidity"
-                  width={48}
-                  height={48}
-                  className="object-contain opacity-70"
+                  width={40}
+                  height={40}
+                  className="object-contain"
+                  style={{ filter: 'brightness(0) saturate(100%) invert(15%) sepia(90%) saturate(5000%) hue-rotate(310deg) brightness(0.6) contrast(1.2)' }}
                   unoptimized
                 />
               </div>
             </div>
 
-            {/* Status Tanah Card - Diperbaiki */}
+            {/* Status Ideal Card */}
             <div className="rounded-[15px] p-5 relative shadow-lg hover:shadow-xl transition-all duration-300" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}>
               <div className="flex items-start justify-between mb-3">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
-                    <p className="text-gray-600" style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}>Status Tanah</p>
-                    {mlPrediction && !isLoadingPrediction && (
+                    <p className="text-black" style={{ fontSize: '16px', fontFamily: 'Arial, Helvetica, sans-serif' }}>Status Ideal</p>
+                    {mlPredictionData?.prediksi_kelembapan !== null && mlPredictionData?.prediksi_kelembapan !== undefined && !isLoadingPrediction && (
                       <span className="px-2 py-0.5 rounded-full bg-[#9e1c60] text-white text-[8px] font-bold" style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}>
                         ML
                       </span>
@@ -290,37 +655,63 @@ export default function BerandaPage() {
                     </div>
                   ) : mlError ? (
                     <div className="space-y-1">
-                      <p className="font-bold" style={{ fontSize: '20px', fontFamily: 'Arial, Helvetica, sans-serif', color: getStatusColor(currentData.status) }}>
-                        {currentData.status}
+                      <p className="font-bold text-black" style={{ fontSize: '20px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                        N/A
                       </p>
                       <p className="text-red-500 text-[10px]" style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}>
                         {mlError}
                       </p>
                     </div>
+                  ) : mlPredictionData?.prediksi_kelembapan !== null && mlPredictionData?.prediksi_kelembapan !== undefined ? (
+                    (mlPredictionData.prediksi_kelembapan >= 55) ? (
+                      <div>
+                        <p className="font-bold" style={{ fontSize: '28px', fontFamily: 'Arial, Helvetica, sans-serif', color: '#106113' }}>
+                          Ideal
+                        </p>
+                        <p className="text-black text-[10px] mt-1" style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                          Tidak perlu penyiraman
+                        </p>
+                      </div>
+                    ) : (
+                      <div>
+                        <p className="font-bold" style={{ fontSize: '28px', fontFamily: 'Arial, Helvetica, sans-serif', color: '#dc2626' }}>
+                          Tidak Ideal
+                        </p>
+                        <p className="text-black text-[10px] mt-1" style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                          Perlu penyiraman
+                        </p>
+                      </div>
+                    )
                   ) : (
-                    <p className="font-bold" style={{ fontSize: '28px', fontFamily: 'Arial, Helvetica, sans-serif', color: getStatusColor(mlPrediction || currentData.status) }}>
-                      {mlPrediction || currentData.status}
+                    <p className="font-bold text-black" style={{ fontSize: '28px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                      N/A
                     </p>
                   )}
                 </div>
                 <Image
                   src={imgIconoirSoilAlt}
-                  alt="Soil"
-                  width={48}
-                  height={48}
-                  className="object-contain opacity-70"
+                  alt="Status Ideal"
+                  width={40}
+                  height={40}
+                  className="object-contain"
+                  style={{ filter: 'brightness(0) saturate(100%) invert(15%) sepia(90%) saturate(5000%) hue-rotate(310deg) brightness(0.6) contrast(1.2)' }}
                   unoptimized
                 />
               </div>
-              {!isLoadingPrediction && (
-                <button
-                  onClick={getMLPrediction}
-                  className="mt-3 w-full bg-[#9e1c60] text-white rounded-[8px] py-2 px-3 hover:bg-[#7d1650] transition-colors text-[11px] font-semibold"
-                  style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}
-                >
-                  Refresh Prediksi ML
-                </button>
-              )}
+            </div>
+          </div>
+
+          {/* Realtime Sensor Chart */}
+          <div className="mb-6">
+            <RealtimeSensorChart data={chartData} />
+            <div className="mt-3 flex justify-end">
+              <button
+                onClick={() => router.push("/petani/penyiraman")}
+                className="text-[#9e1c60] hover:underline font-semibold"
+                style={{ fontSize: '12px', fontFamily: 'Arial, Helvetica, sans-serif' }}
+              >
+                Lihat Detail Penyiraman →
+              </button>
             </div>
           </div>
 
@@ -369,14 +760,18 @@ export default function BerandaPage() {
                 </div>
               </div>
               <div className="flex items-center justify-center ml-8">
-                <div className={`transition-all ${isWateringOn ? 'animate-pulse' : 'opacity-50'}`}>
+                <div className={`transition-all ${isWateringOn ? 'animate-pulse' : ''}`}>
                   <Image
                     src={imgMingcutePowerFill}
                     alt="Power"
-                    width={120}
-                    height={120}
+                    width={80}
+                    height={80}
                     className="object-contain"
-                    style={{ filter: isWateringOn ? 'none' : 'grayscale(100%)' }}
+                    style={{ 
+                      filter: isWateringOn 
+                        ? 'brightness(0) saturate(100%) invert(40%) sepia(95%) saturate(2000%) hue-rotate(90deg) brightness(0.9) contrast(1.2)' 
+                        : 'brightness(0) saturate(100%) invert(20%) sepia(95%) saturate(5000%) hue-rotate(0deg) brightness(0.8) contrast(1.2)'
+                    }}
                     unoptimized
                   />
                 </div>

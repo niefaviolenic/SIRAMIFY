@@ -255,12 +255,12 @@ export default function PesananPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#fef7f5] flex" style={{ minHeight: '100vh' }}>
+    <div className="min-h-screen bg-white flex" style={{ minHeight: '100vh' }}>
       {/* Sidebar */}
       <PetaniSidebar />
 
       {/* Main Content */}
-      <div className="flex-1 ml-[200px] min-h-screen bg-[#fef7f5]" style={{ minHeight: '100vh', width: 'calc(100% - 180px)', paddingBottom: '40px' }}>
+      <div className="flex-1 ml-[200px] min-h-screen bg-white" style={{ minHeight: '100vh', width: 'calc(100% - 180px)', paddingBottom: '40px' }}>
         <div className="p-8" style={{ paddingLeft: '10px', minHeight: '100%' }}>
           {/* Header */}
           <div className="mb-8">
