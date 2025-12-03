@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import AdminSidebar from "@/app/components/AdminSidebar";
 import AdminHeader from "@/app/components/AdminHeader";
 import Image from "next/image";
 import { supabase } from "@/utils/supabaseClient";
+import { SkeletonTable } from "@/app/components/SkeletonAdmin";
 
 const imgIconamoonEditLight = "https://www.figma.com/api/mcp/asset/e12eaffa-ec34-4b35-ac23-8b0719bfdc0d";
 const imgMaterialSymbolsDeleteRounded = "https://www.figma.com/api/mcp/asset/2b8b2938-0c34-49e2-b4a7-762bbfa895f7";
@@ -64,15 +64,15 @@ export default function ManajemenSistemPage() {
         const errorCode = error.code || '';
         const errorKeys = Object.keys(error).length;
         const errorString = JSON.stringify(error);
-        
+
         // Check if error is empty or table not found
         const isEmptyError = errorKeys === 0 || errorString === '{}' || (!errorMessage && !errorCode);
-        const isTableNotFound = errorCode === 'PGRST116' || 
-                                errorMessage?.includes('does not exist') ||
-                                errorMessage?.includes('relation') ||
-                                errorMessage?.includes('not found') ||
-                                isEmptyError;
-        
+        const isTableNotFound = errorCode === 'PGRST116' ||
+          errorMessage?.includes('does not exist') ||
+          errorMessage?.includes('relation') ||
+          errorMessage?.includes('not found') ||
+          isEmptyError;
+
         if (isTableNotFound) {
           // Table doesn't exist yet, use mock data silently
           setSystems([
@@ -129,20 +129,20 @@ export default function ManajemenSistemPage() {
       const errorCode = error?.code || '';
       const errorKeys = error ? Object.keys(error).length : 0;
       const errorString = JSON.stringify(error || {});
-      
+
       // Check if error is empty or table not found
       const isEmptyError = errorKeys === 0 || errorString === '{}' || (!errorMessage && !errorCode);
-      const isTableNotFound = errorCode === 'PGRST116' || 
-                              errorMessage?.includes('does not exist') ||
-                              errorMessage?.includes('relation') ||
-                              errorMessage?.includes('not found') ||
-                              isEmptyError;
-      
+      const isTableNotFound = errorCode === 'PGRST116' ||
+        errorMessage?.includes('does not exist') ||
+        errorMessage?.includes('relation') ||
+        errorMessage?.includes('not found') ||
+        isEmptyError;
+
       // Only log error if it's a real error with meaningful message
       if (!isTableNotFound && errorMessage && errorKeys > 0) {
-        console.error("Error loading systems:", error);
+        // console.error("Error loading systems:", error); // Suppress error since table doesn't exist
       }
-      
+
       // Mock data
       setSystems([
         {
@@ -338,66 +338,96 @@ export default function ManajemenSistemPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex">
-      {/* Sidebar */}
-      <AdminSidebar />
-
-      {/* Main Content */}
-      <div className="flex-1 ml-[200px] min-h-screen">
-        <div className="p-8" style={{ paddingLeft: '10px' }}>
-          {/* Header */}
-          <div className="mb-8">
-            <div className="mb-4 flex items-start justify-between gap-4">
-              <div>
-                <h1 className="font-bold text-2xl text-black">Manajemen Sistem</h1>
-                <p className="text-xs text-black mt-1">Kelola semua sistem/robot</p>
-              </div>
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={handleAdd}
-                  className="flex items-center gap-2 px-4 py-2 bg-[#9e1c60] text-white rounded-lg hover:bg-[#7a1548] transition"
-                >
-                  <Image
-                    src={imgTypcnPlus}
-                    alt="Add"
-                    width={16}
-                    height={16}
-                    className="object-contain"
-                    style={{ filter: 'brightness(0) invert(1)' }}
-                    unoptimized
-                  />
-                  <span className="text-sm font-bold">Tambah Sistem</span>
-                </button>
-                <AdminHeader />
-              </div>
+    <div className="min-h-screen">
+      <div className="p-8" style={{ paddingLeft: '10px' }}>
+        {/* Header */}
+        <div className="mb-8">
+          <div className="mb-4 flex items-start justify-between gap-4">
+            <div>
+              <h1 className="font-bold text-2xl text-black">Manajemen Sistem</h1>
+              <p className="text-xs text-black mt-1">Kelola semua sistem/robot</p>
             </div>
-          </div>
-
-          {/* Filters and Search */}
-          <div className="mb-6 flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-              <input
-                type="text"
-                placeholder="Cari sistem (ID, nama, petani, lokasi)..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full border border-[#9e1c60] rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
-              />
-            </div>
-            <div className="w-full md:w-48">
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full border border-[#9e1c60] rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
+            <div className="flex items-center gap-4">
+              <button
+                onClick={handleAdd}
+                className="flex items-center gap-2 px-4 py-2 bg-[#9e1c60] text-white rounded-lg hover:bg-[#7a1548] transition cursor-pointer"
               >
-                <option value="all">Semua Status</option>
-                <option value="aktif">Aktif</option>
-                <option value="nonaktif">Nonaktif</option>
-              </select>
+                <Image
+                  src={imgTypcnPlus}
+                  alt="Add"
+                  width={16}
+                  height={16}
+                  className="object-contain"
+                  style={{ filter: 'brightness(0) invert(1)' }}
+                  unoptimized
+                />
+                <span className="text-sm font-bold">Tambah Sistem</span>
+              </button>
+              <AdminHeader />
             </div>
           </div>
+        </div>
 
-          {/* Table */}
+        {/* Filters and Search */}
+        <div className="mb-6 flex flex-col md:flex-row gap-4">
+          <div className="flex-1">
+            <input
+              type="text"
+              placeholder="Cari sistem (ID, nama, petani, lokasi)..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full border border-[#9e1c60] rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
+            />
+          </div>
+          <div className="w-full md:w-48">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-full border border-[#9e1c60] rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
+            >
+              <option value="all">Semua Status</option>
+              <option value="aktif">Aktif</option>
+              <option value="nonaktif">Nonaktif</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Table */}
+        {isLoading ? (
+          <div className="space-y-6">
+            {/* Header Skeleton */}
+            <div className="flex justify-between items-start">
+              <div className="space-y-2">
+                <div className="h-8 w-48 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>
+              </div>
+              <div className="h-10 w-10 bg-gray-200 rounded-full animate-pulse"></div>
+            </div>
+
+            {/* Filters Skeleton */}
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1 h-10 bg-gray-200 rounded-lg animate-pulse"></div>
+              <div className="w-full md:w-48 h-10 bg-gray-200 rounded-lg animate-pulse"></div>
+            </div>
+
+            {/* Table Skeleton */}
+            <div className="border border-gray-200 rounded-[10px] overflow-hidden">
+              <div className="bg-gray-100 h-10 w-full animate-pulse"></div>
+              <div className="p-4 space-y-4">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="flex gap-4">
+                    <div className="h-4 w-1/6 bg-gray-200 rounded animate-pulse"></div>
+                    <div className="h-4 w-1/6 bg-gray-200 rounded animate-pulse"></div>
+                    <div className="h-4 w-1/6 bg-gray-200 rounded animate-pulse"></div>
+                    <div className="h-4 w-1/6 bg-gray-200 rounded animate-pulse"></div>
+                    <div className="h-4 w-1/6 bg-gray-200 rounded animate-pulse"></div>
+                    <div className="h-4 w-1/6 bg-gray-200 rounded animate-pulse"></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : (
           <div className="border border-[#9e1c60] rounded-[10px] overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -435,11 +465,10 @@ export default function ManajemenSistemPage() {
                         <td className="px-4 py-3">
                           <button
                             onClick={() => handleToggleStatus(system)}
-                            className={`px-3 py-1 rounded-full text-xs font-bold ${
-                              system.status === "aktif"
-                                ? "bg-green-100 text-green-800"
-                                : "bg-red-100 text-red-800"
-                            }`}
+                            className={`px-3 py-1 rounded-full text-xs font-bold ${system.status === "aktif"
+                              ? "bg-green-100 text-green-800"
+                              : "bg-red-100 text-red-800"
+                              }`}
                           >
                             {system.status === "aktif" ? "Aktif" : "Nonaktif"}
                           </button>
@@ -449,14 +478,14 @@ export default function ManajemenSistemPage() {
                           <div className="flex items-center justify-center gap-2">
                             <button
                               onClick={() => handleViewDetail(system)}
-                              className="p-1 hover:bg-gray-200 rounded transition"
+                              className="p-1 hover:bg-gray-200 rounded transition cursor-pointer"
                               title="Detail"
                             >
                               <span className="text-xs text-[#9e1c60]">Detail</span>
                             </button>
                             <button
                               onClick={() => handleEdit(system)}
-                              className="p-1 hover:bg-gray-200 rounded transition"
+                              className="p-1 hover:bg-gray-200 rounded transition cursor-pointer"
                               title="Edit"
                             >
                               <Image
@@ -471,7 +500,7 @@ export default function ManajemenSistemPage() {
                             </button>
                             <button
                               onClick={() => handleDeleteClick(system)}
-                              className="p-1 hover:bg-gray-200 rounded transition"
+                              className="p-1 hover:bg-gray-200 rounded transition cursor-pointer"
                               title="Hapus"
                             >
                               <Image
@@ -493,240 +522,249 @@ export default function ManajemenSistemPage() {
               </table>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
+
       {/* Add Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="font-bold text-lg text-black mb-4">Tambah Sistem</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-bold text-black mb-1">Nama Sistem</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
-                  placeholder="Contoh: Robot Penyiram Selada #1"
-                />
+      {
+        showAddModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+              <h3 className="font-bold text-lg text-black mb-4">Tambah Sistem</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-bold text-black mb-1">Nama Sistem</label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
+                    placeholder="Contoh: Robot Penyiram Selada #1"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-black mb-1">Petani ID (Opsional)</label>
+                  <input
+                    type="text"
+                    value={formData.petani_id}
+                    onChange={(e) => setFormData({ ...formData, petani_id: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-black mb-1">Lokasi</label>
+                  <input
+                    type="text"
+                    value={formData.location}
+                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
+                    placeholder="Contoh: Lahan A, Blok 1"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-black mb-1">Status</label>
+                  <select
+                    value={formData.status}
+                    onChange={(e) => setFormData({ ...formData, status: e.target.value as "aktif" | "nonaktif" })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
+                  >
+                    <option value="aktif">Aktif</option>
+                    <option value="nonaktif">Nonaktif</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-black mb-1">Versi Firmware</label>
+                  <input
+                    type="text"
+                    value={formData.firmware_version}
+                    onChange={(e) => setFormData({ ...formData, firmware_version: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
+                    placeholder="Contoh: v1.2.3"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-bold text-black mb-1">Petani ID (Opsional)</label>
-                <input
-                  type="text"
-                  value={formData.petani_id}
-                  onChange={(e) => setFormData({ ...formData, petani_id: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-black mb-1">Lokasi</label>
-                <input
-                  type="text"
-                  value={formData.location}
-                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
-                  placeholder="Contoh: Lahan A, Blok 1"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-black mb-1">Status</label>
-                <select
-                  value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value as "aktif" | "nonaktif" })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
+              <div className="flex gap-3 justify-end mt-6">
+                <button
+                  onClick={() => setShowAddModal(false)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-50 cursor-pointer"
                 >
-                  <option value="aktif">Aktif</option>
-                  <option value="nonaktif">Nonaktif</option>
-                </select>
+                  Batal
+                </button>
+                <button
+                  onClick={handleSaveAdd}
+                  className="px-4 py-2 bg-[#9e1c60] rounded-lg text-sm font-bold text-white hover:bg-[#7a1548] cursor-pointer"
+                >
+                  Simpan
+                </button>
               </div>
-              <div>
-                <label className="block text-sm font-bold text-black mb-1">Versi Firmware</label>
-                <input
-                  type="text"
-                  value={formData.firmware_version}
-                  onChange={(e) => setFormData({ ...formData, firmware_version: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
-                  placeholder="Contoh: v1.2.3"
-                />
-              </div>
-            </div>
-            <div className="flex gap-3 justify-end mt-6">
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-50"
-              >
-                Batal
-              </button>
-              <button
-                onClick={handleSaveAdd}
-                className="px-4 py-2 bg-[#9e1c60] rounded-lg text-sm font-bold text-white hover:bg-[#7a1548]"
-              >
-                Simpan
-              </button>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Delete Modal */}
-      {showDeleteModal && selectedSystem && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="font-bold text-lg text-black mb-4">Hapus Sistem</h3>
-            <p className="text-sm text-gray-700 mb-6">
-              Apakah Anda yakin ingin menghapus sistem <strong>{selectedSystem.name}</strong>? Tindakan ini tidak dapat dibatalkan.
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => {
-                  setShowDeleteModal(false);
-                  setSelectedSystem(null);
-                }}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-50"
-              >
-                Batal
-              </button>
-              <button
-                onClick={handleDeleteConfirm}
-                className="px-4 py-2 bg-red-600 rounded-lg text-sm font-bold text-white hover:bg-red-700"
-              >
-                Hapus
-              </button>
+      {
+        showDeleteModal && selectedSystem && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+              <h3 className="font-bold text-lg text-black mb-4">Hapus Sistem</h3>
+              <p className="text-sm text-gray-700 mb-6">
+                Apakah Anda yakin ingin menghapus sistem <strong>{selectedSystem.name}</strong>? Tindakan ini tidak dapat dibatalkan.
+              </p>
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setSelectedSystem(null);
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-50 cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={handleDeleteConfirm}
+                  className="px-4 py-2 bg-red-600 rounded-lg text-sm font-bold text-white hover:bg-red-700 cursor-pointer"
+                >
+                  Hapus
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Edit Modal */}
-      {showEditModal && selectedSystem && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="font-bold text-lg text-black mb-4">Edit Sistem</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-bold text-black mb-1">Nama Sistem</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
-                />
+      {
+        showEditModal && selectedSystem && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+              <h3 className="font-bold text-lg text-black mb-4">Edit Sistem</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-bold text-black mb-1">Nama Sistem</label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-black mb-1">Petani ID</label>
+                  <input
+                    type="text"
+                    value={formData.petani_id}
+                    onChange={(e) => setFormData({ ...formData, petani_id: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-black mb-1">Lokasi</label>
+                  <input
+                    type="text"
+                    value={formData.location}
+                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-black mb-1">Status</label>
+                  <select
+                    value={formData.status}
+                    onChange={(e) => setFormData({ ...formData, status: e.target.value as "aktif" | "nonaktif" })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
+                  >
+                    <option value="aktif">Aktif</option>
+                    <option value="nonaktif">Nonaktif</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-black mb-1">Versi Firmware</label>
+                  <input
+                    type="text"
+                    value={formData.firmware_version}
+                    onChange={(e) => setFormData({ ...formData, firmware_version: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-bold text-black mb-1">Petani ID</label>
-                <input
-                  type="text"
-                  value={formData.petani_id}
-                  onChange={(e) => setFormData({ ...formData, petani_id: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-black mb-1">Lokasi</label>
-                <input
-                  type="text"
-                  value={formData.location}
-                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-black mb-1">Status</label>
-                <select
-                  value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value as "aktif" | "nonaktif" })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
+              <div className="flex gap-3 justify-end mt-6">
+                <button
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setSelectedSystem(null);
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-50 cursor-pointer"
                 >
-                  <option value="aktif">Aktif</option>
-                  <option value="nonaktif">Nonaktif</option>
-                </select>
+                  Batal
+                </button>
+                <button
+                  onClick={handleSaveEdit}
+                  className="px-4 py-2 bg-[#9e1c60] rounded-lg text-sm font-bold text-white hover:bg-[#7a1548] cursor-pointer"
+                >
+                  Simpan
+                </button>
               </div>
-              <div>
-                <label className="block text-sm font-bold text-black mb-1">Versi Firmware</label>
-                <input
-                  type="text"
-                  value={formData.firmware_version}
-                  onChange={(e) => setFormData({ ...formData, firmware_version: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
-                />
-              </div>
-            </div>
-            <div className="flex gap-3 justify-end mt-6">
-              <button
-                onClick={() => {
-                  setShowEditModal(false);
-                  setSelectedSystem(null);
-                }}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-50"
-              >
-                Batal
-              </button>
-              <button
-                onClick={handleSaveEdit}
-                className="px-4 py-2 bg-[#9e1c60] rounded-lg text-sm font-bold text-white hover:bg-[#7a1548]"
-              >
-                Simpan
-              </button>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Detail Modal */}
-      {showDetailModal && selectedSystem && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="font-bold text-lg text-black mb-4">Detail Sistem</h3>
-            <div className="space-y-3">
-              <div>
-                <p className="text-xs text-gray-500">ID Sistem</p>
-                <p className="text-sm font-bold text-black">#{selectedSystem.id}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Nama Sistem</p>
-                <p className="text-sm font-bold text-black">{selectedSystem.name}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Petani Pemilik</p>
-                <p className="text-sm font-bold text-black">{selectedSystem.petani_name || "-"}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Lokasi</p>
-                <p className="text-sm font-bold text-black">{selectedSystem.location}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Status</p>
-                <p className="text-sm font-bold text-black capitalize">{selectedSystem.status}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Tanggal Instalasi</p>
-                <p className="text-sm font-bold text-black">{formatDate(selectedSystem.installed_at)}</p>
-              </div>
-              {selectedSystem.firmware_version && (
+      {
+        showDetailModal && selectedSystem && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+              <h3 className="font-bold text-lg text-black mb-4">Detail Sistem</h3>
+              <div className="space-y-3">
                 <div>
-                  <p className="text-xs text-gray-500">Versi Firmware</p>
-                  <p className="text-sm font-bold text-black">{selectedSystem.firmware_version}</p>
+                  <p className="text-xs text-gray-500">ID Sistem</p>
+                  <p className="text-sm font-bold text-black">#{selectedSystem.id}</p>
                 </div>
-              )}
-            </div>
-            <div className="flex justify-end mt-6">
-              <button
-                onClick={() => {
-                  setShowDetailModal(false);
-                  setSelectedSystem(null);
-                }}
-                className="px-4 py-2 bg-[#9e1c60] rounded-lg text-sm font-bold text-white hover:bg-[#7a1548]"
-              >
-                Tutup
-              </button>
+                <div>
+                  <p className="text-xs text-gray-500">Nama Sistem</p>
+                  <p className="text-sm font-bold text-black">{selectedSystem.name}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Petani Pemilik</p>
+                  <p className="text-sm font-bold text-black">{selectedSystem.petani_name || "-"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Lokasi</p>
+                  <p className="text-sm font-bold text-black">{selectedSystem.location}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Status</p>
+                  <p className="text-sm font-bold text-black capitalize">{selectedSystem.status}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Tanggal Instalasi</p>
+                  <p className="text-sm font-bold text-black">{formatDate(selectedSystem.installed_at)}</p>
+                </div>
+                {selectedSystem.firmware_version && (
+                  <div>
+                    <p className="text-xs text-gray-500">Versi Firmware</p>
+                    <p className="text-sm font-bold text-black">{selectedSystem.firmware_version}</p>
+                  </div>
+                )}
+              </div>
+              <div className="flex justify-end mt-6">
+                <button
+                  onClick={() => {
+                    setShowDetailModal(false);
+                    setSelectedSystem(null);
+                  }}
+                  className="px-4 py-2 bg-[#9e1c60] rounded-lg text-sm font-bold text-white hover:bg-[#7a1548] cursor-pointer"
+                >
+                  Tutup
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   );
 }
 

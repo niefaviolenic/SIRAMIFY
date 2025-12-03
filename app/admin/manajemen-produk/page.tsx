@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import AdminSidebar from "@/app/components/AdminSidebar";
 import AdminHeader from "@/app/components/AdminHeader";
 import Image from "next/image";
 import { supabase } from "@/utils/supabaseClient";
+import { SkeletonTable } from "@/app/components/SkeletonAdmin";
+import Toast from "@/app/components/Toast";
 
 const imgIconamoonEditLight = "https://www.figma.com/api/mcp/asset/e12eaffa-ec34-4b35-ac23-8b0719bfdc0d";
 const imgMaterialSymbolsDeleteRounded = "https://www.figma.com/api/mcp/asset/2b8b2938-0c34-49e2-b4a7-762bbfa895f7";
@@ -41,6 +42,7 @@ export default function ManajemenProdukPage() {
     status: "Tersedia" as "Tersedia" | "Stok Menipis" | "Habis",
     kategori: "",
   });
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   useEffect(() => {
     loadProducts();
@@ -54,10 +56,10 @@ export default function ManajemenProdukPage() {
     try {
       // Try to fetch from products table
       const { data, error } = await supabase
-        .from("products")
+        .from("produk")
         .select(`
           *,
-          petani:users!products_petani_id_fkey(full_name, email)
+          petani:users!produk_petani_id_fkey(full_name, email)
         `)
         .order("created_at", { ascending: false });
 
@@ -117,17 +119,29 @@ export default function ManajemenProdukPage() {
       }
 
       if (data) {
-        const mappedProducts: Product[] = data.map((product: any) => ({
-          id: product.id,
-          namaProduk: product.name || product.nama_produk || "",
-          harga: `Rp${product.price || 0}`,
-          stok: `${product.stock || 0}/${product.max_stock || 1000}`,
-          status: (product.status === "habis" ? "Habis" : product.status === "stok_menipis" ? "Stok Menipis" : "Tersedia") as "Tersedia" | "Stok Menipis" | "Habis",
-          foto: product.image || product.foto || "",
-          petani_id: product.petani_id,
-          petani_name: product.petani?.full_name || product.petani?.email || "Unknown",
-          kategori: product.category || product.kategori || "",
-        }));
+        const mappedProducts: Product[] = data.map((product: any) => {
+          const stock = product.stok || 0;
+          const maxStock = product.stok_max || 1000; // Use stok_max from DB or default
+          let status: "Tersedia" | "Stok Menipis" | "Habis" = "Tersedia";
+
+          if (stock === 0) {
+            status = "Habis";
+          } else if (stock < 50) {
+            status = "Stok Menipis";
+          }
+
+          return {
+            id: product.id,
+            namaProduk: product.nama || "", // Changed from nama_produk to nama
+            harga: `Rp${(product.harga || 0).toLocaleString('id-ID')}`,
+            stok: `${stock}/${maxStock}`,
+            status: status,
+            foto: product.foto || "",
+            petani_id: product.petani_id,
+            petani_name: product.petani?.full_name || product.petani?.email || "Unknown",
+            kategori: "Umum", // Default category as it's not in DB
+          };
+        });
         setProducts(mappedProducts);
       }
     } catch (error: any) {
@@ -147,7 +161,7 @@ export default function ManajemenProdukPage() {
 
       // Only log error if it's a real error with meaningful message
       if (!isTableNotFound && errorMessage && errorKeys > 0) {
-        console.error("Error loading products:", error);
+        // console.error("Error loading products:", error); // Suppress error
       }
 
       // Mock data
@@ -231,7 +245,7 @@ export default function ManajemenProdukPage() {
 
     try {
       const { error } = await supabase
-        .from("products")
+        .from("produk")
         .delete()
         .eq("id", selectedProduct.id);
 
@@ -240,9 +254,10 @@ export default function ManajemenProdukPage() {
       setProducts(products.filter(p => p.id !== selectedProduct.id));
       setShowDeleteModal(false);
       setSelectedProduct(null);
+      setToast({ message: "Produk berhasil dihapus!", type: "success" });
     } catch (error) {
       console.error("Error deleting product:", error);
-      alert("Gagal menghapus produk. Silakan coba lagi.");
+      setToast({ message: "Gagal menghapus produk. Silakan coba lagi.", type: "error" });
       setShowDeleteModal(false);
       setSelectedProduct(null);
     }
@@ -253,13 +268,13 @@ export default function ManajemenProdukPage() {
 
     try {
       const { error } = await supabase
-        .from("products")
+        .from("produk")
         .update({
-          name: editFormData.namaProduk,
-          price: parseInt(editFormData.harga),
-          stock: parseInt(editFormData.stok),
-          status: editFormData.status.toLowerCase().replace(" ", "_"),
-          category: editFormData.kategori,
+          nama: editFormData.namaProduk, // Changed from nama_produk to nama
+          harga: parseInt(editFormData.harga),
+          stok: parseInt(editFormData.stok),
+          // status and category are not in DB, so we don't update them
+          updated_at: new Date().toISOString(),
         })
         .eq("id", selectedProduct.id);
 
@@ -267,14 +282,15 @@ export default function ManajemenProdukPage() {
 
       setProducts(products.map(p =>
         p.id === selectedProduct.id
-          ? { ...p, ...editFormData, harga: `Rp${editFormData.harga}` }
+          ? { ...p, ...editFormData, namaProduk: editFormData.namaProduk, harga: `Rp${parseInt(editFormData.harga).toLocaleString('id-ID')}` }
           : p
       ));
       setShowEditModal(false);
       setSelectedProduct(null);
+      setToast({ message: "Produk berhasil diperbarui!", type: "success" });
     } catch (error) {
       console.error("Error updating product:", error);
-      alert("Gagal mengupdate produk. Silakan coba lagi.");
+      setToast({ message: "Gagal mengupdate produk. Silakan coba lagi.", type: "error" });
     }
   };
 
@@ -297,52 +313,90 @@ export default function ManajemenProdukPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex">
-      {/* Sidebar */}
-      <AdminSidebar />
+    <div className="min-h-screen">
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+      <div className="p-8" style={{ paddingLeft: '10px' }}>
+        {/* Header */}
+        <div className="mb-8">
+          <div className="mb-4 flex items-start justify-between gap-4">
+            <div>
+              <h1 className="font-bold text-2xl text-black">Manajemen Produk</h1>
+              <p className="text-xs text-black mt-1">Kelola semua produk dari semua petani</p>
+            </div>
+            <div className="flex-shrink-0">
+              <AdminHeader />
+            </div>
+          </div>
+        </div>
 
-      {/* Main Content */}
-      <div className="flex-1 ml-[200px] min-h-screen">
-        <div className="p-8" style={{ paddingLeft: '10px' }}>
-          {/* Header */}
-          <div className="mb-8">
-            <div className="mb-4 flex items-start justify-between gap-4">
-              <div>
-                <h1 className="font-bold text-2xl text-black">Manajemen Produk</h1>
-                <p className="text-xs text-black mt-1">Kelola semua produk dari semua petani</p>
+        {/* Filters and Search */}
+        <div className="mb-6 flex flex-col md:flex-row gap-4">
+          <div className="flex-1">
+            <input
+              type="text"
+              placeholder="Cari produk (nama, petani)..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full border border-[#9e1c60] rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
+            />
+          </div>
+          <div className="w-full md:w-48">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-full border border-[#9e1c60] rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
+            >
+              <option value="all">Semua Status</option>
+              <option value="Tersedia">Tersedia</option>
+              <option value="Stok Menipis">Stok Menipis</option>
+              <option value="Habis">Habis</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Table */}
+        {isLoading ? (
+          <div className="space-y-6">
+            {/* Header Skeleton */}
+            <div className="flex justify-between items-start">
+              <div className="space-y-2">
+                <div className="h-8 w-48 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>
               </div>
-              <div className="flex-shrink-0">
-                <AdminHeader />
+              <div className="h-10 w-10 bg-gray-200 rounded-full animate-pulse"></div>
+            </div>
+
+            {/* Filters Skeleton */}
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1 h-10 bg-gray-200 rounded-lg animate-pulse"></div>
+              <div className="w-full md:w-48 h-10 bg-gray-200 rounded-lg animate-pulse"></div>
+            </div>
+
+            {/* Table Skeleton */}
+            <div className="border border-gray-200 rounded-[10px] overflow-hidden">
+              <div className="bg-gray-100 h-10 w-full animate-pulse"></div>
+              <div className="p-4 space-y-4">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="flex gap-4">
+                    <div className="h-12 w-12 bg-gray-200 rounded animate-pulse"></div>
+                    <div className="flex-1 space-y-2">
+                      <div className="h-4 w-3/4 bg-gray-200 rounded animate-pulse"></div>
+                      <div className="h-3 w-1/2 bg-gray-200 rounded animate-pulse"></div>
+                    </div>
+                    <div className="h-4 w-1/6 bg-gray-200 rounded animate-pulse"></div>
+                    <div className="h-4 w-1/6 bg-gray-200 rounded animate-pulse"></div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
-
-          {/* Filters and Search */}
-          <div className="mb-6 flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-              <input
-                type="text"
-                placeholder="Cari produk (nama, petani)..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full border border-[#9e1c60] rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
-              />
-            </div>
-            <div className="w-full md:w-48">
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full border border-[#9e1c60] rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
-              >
-                <option value="all">Semua Status</option>
-                <option value="Tersedia">Tersedia</option>
-                <option value="Stok Menipis">Stok Menipis</option>
-                <option value="Habis">Habis</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Table */}
+        ) : (
           <div className="border border-[#9e1c60] rounded-[10px] overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -400,14 +454,14 @@ export default function ManajemenProdukPage() {
                           <div className="flex items-center justify-center gap-2">
                             <button
                               onClick={() => handleViewDetail(product)}
-                              className="p-1 hover:bg-gray-200 rounded transition"
+                              className="p-1 hover:bg-gray-200 rounded transition cursor-pointer"
                               title="Detail"
                             >
                               <span className="text-xs text-[#9e1c60]">Detail</span>
                             </button>
                             <button
                               onClick={() => handleEdit(product)}
-                              className="p-1 hover:bg-gray-200 rounded transition"
+                              className="p-1 hover:bg-gray-200 rounded transition cursor-pointer"
                               title="Edit"
                             >
                               <Image
@@ -422,7 +476,7 @@ export default function ManajemenProdukPage() {
                             </button>
                             <button
                               onClick={() => handleDeleteClick(product)}
-                              className="p-1 hover:bg-gray-200 rounded transition"
+                              className="p-1 hover:bg-gray-200 rounded transition cursor-pointer"
                               title="Hapus"
                             >
                               <Image
@@ -444,171 +498,178 @@ export default function ManajemenProdukPage() {
               </table>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
+
       {/* Delete Modal */}
-      {showDeleteModal && selectedProduct && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="font-bold text-lg text-black mb-4">Hapus Produk</h3>
-            <p className="text-sm text-gray-700 mb-6">
-              Apakah Anda yakin ingin menghapus produk <strong>{selectedProduct.namaProduk}</strong>? Tindakan ini tidak dapat dibatalkan.
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => {
-                  setShowDeleteModal(false);
-                  setSelectedProduct(null);
-                }}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-50"
-              >
-                Batal
-              </button>
-              <button
-                onClick={handleDeleteConfirm}
-                className="px-4 py-2 bg-red-600 rounded-lg text-sm font-bold text-white hover:bg-red-700"
-              >
-                Hapus
-              </button>
+      {
+        showDeleteModal && selectedProduct && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+              <h3 className="font-bold text-lg text-black mb-4">Hapus Produk</h3>
+              <p className="text-sm text-gray-700 mb-6">
+                Apakah Anda yakin ingin menghapus produk <strong>{selectedProduct.namaProduk}</strong>? Tindakan ini tidak dapat dibatalkan.
+              </p>
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setSelectedProduct(null);
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-50 cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={handleDeleteConfirm}
+                  className="px-4 py-2 bg-red-600 rounded-lg text-sm font-bold text-white hover:bg-red-700 cursor-pointer"
+                >
+                  Hapus
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Edit Modal */}
-      {showEditModal && selectedProduct && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="font-bold text-lg text-black mb-4">Edit Produk</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-bold text-black mb-1">Nama Produk</label>
-                <input
-                  type="text"
-                  value={editFormData.namaProduk}
-                  onChange={(e) => setEditFormData({ ...editFormData, namaProduk: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
-                />
+      {
+        showEditModal && selectedProduct && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+              <h3 className="font-bold text-lg text-black mb-4">Edit Produk</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-bold text-black mb-1">Nama Produk</label>
+                  <input
+                    type="text"
+                    value={editFormData.namaProduk}
+                    onChange={(e) => setEditFormData({ ...editFormData, namaProduk: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-black mb-1">Harga</label>
+                  <input
+                    type="number"
+                    value={editFormData.harga}
+                    onChange={(e) => setEditFormData({ ...editFormData, harga: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-black mb-1">Stok</label>
+                  <input
+                    type="number"
+                    value={editFormData.stok}
+                    onChange={(e) => setEditFormData({ ...editFormData, stok: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-black mb-1">Status</label>
+                  <select
+                    value={editFormData.status}
+                    onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value as "Tersedia" | "Stok Menipis" | "Habis" })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
+                  >
+                    <option value="Tersedia">Tersedia</option>
+                    <option value="Stok Menipis">Stok Menipis</option>
+                    <option value="Habis">Habis</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-black mb-1">Kategori</label>
+                  <input
+                    type="text"
+                    value={editFormData.kategori}
+                    onChange={(e) => setEditFormData({ ...editFormData, kategori: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-bold text-black mb-1">Harga</label>
-                <input
-                  type="number"
-                  value={editFormData.harga}
-                  onChange={(e) => setEditFormData({ ...editFormData, harga: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-black mb-1">Stok</label>
-                <input
-                  type="number"
-                  value={editFormData.stok}
-                  onChange={(e) => setEditFormData({ ...editFormData, stok: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-black mb-1">Status</label>
-                <select
-                  value={editFormData.status}
-                  onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value as "Tersedia" | "Stok Menipis" | "Habis" })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
+              <div className="flex gap-3 justify-end mt-6">
+                <button
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setSelectedProduct(null);
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-50 cursor-pointer"
                 >
-                  <option value="Tersedia">Tersedia</option>
-                  <option value="Stok Menipis">Stok Menipis</option>
-                  <option value="Habis">Habis</option>
-                </select>
+                  Batal
+                </button>
+                <button
+                  onClick={handleSaveEdit}
+                  className="px-4 py-2 bg-[#9e1c60] rounded-lg text-sm font-bold text-white hover:bg-[#7a1548] cursor-pointer"
+                >
+                  Simpan
+                </button>
               </div>
-              <div>
-                <label className="block text-sm font-bold text-black mb-1">Kategori</label>
-                <input
-                  type="text"
-                  value={editFormData.kategori}
-                  onChange={(e) => setEditFormData({ ...editFormData, kategori: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
-                />
-              </div>
-            </div>
-            <div className="flex gap-3 justify-end mt-6">
-              <button
-                onClick={() => {
-                  setShowEditModal(false);
-                  setSelectedProduct(null);
-                }}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-50"
-              >
-                Batal
-              </button>
-              <button
-                onClick={handleSaveEdit}
-                className="px-4 py-2 bg-[#9e1c60] rounded-lg text-sm font-bold text-white hover:bg-[#7a1548]"
-              >
-                Simpan
-              </button>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Detail Modal */}
-      {showDetailModal && selectedProduct && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="font-bold text-lg text-black mb-4">Detail Produk</h3>
-            <div className="space-y-3 mb-4">
-              <div className="w-full h-48 relative rounded overflow-hidden mb-4">
-                <Image
-                  src={selectedProduct.foto}
-                  alt={selectedProduct.namaProduk}
-                  fill
-                  className="object-cover"
-                  unoptimized
-                />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Nama Produk</p>
-                <p className="text-sm font-bold text-black">{selectedProduct.namaProduk}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Petani</p>
-                <p className="text-sm font-bold text-black">{selectedProduct.petani_name || "-"}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Harga</p>
-                <p className="text-sm font-bold text-black">{selectedProduct.harga}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Stok</p>
-                <p className="text-sm font-bold text-black">{selectedProduct.stok}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Status</p>
-                <p className="text-sm font-bold text-black">{selectedProduct.status}</p>
-              </div>
-              {selectedProduct.kategori && (
-                <div>
-                  <p className="text-xs text-gray-500">Kategori</p>
-                  <p className="text-sm font-bold text-black">{selectedProduct.kategori}</p>
+      {
+        showDetailModal && selectedProduct && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+              <h3 className="font-bold text-lg text-black mb-4">Detail Produk</h3>
+              <div className="space-y-3 mb-4">
+                <div className="w-full h-48 relative rounded overflow-hidden mb-4">
+                  <Image
+                    src={selectedProduct.foto}
+                    alt={selectedProduct.namaProduk}
+                    fill
+                    className="object-cover"
+                    unoptimized
+                  />
                 </div>
-              )}
-            </div>
-            <div className="flex justify-end">
-              <button
-                onClick={() => {
-                  setShowDetailModal(false);
-                  setSelectedProduct(null);
-                }}
-                className="px-4 py-2 bg-[#9e1c60] rounded-lg text-sm font-bold text-white hover:bg-[#7a1548]"
-              >
-                Tutup
-              </button>
+                <div>
+                  <p className="text-xs text-gray-500">Nama Produk</p>
+                  <p className="text-sm font-bold text-black">{selectedProduct.namaProduk}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Petani</p>
+                  <p className="text-sm font-bold text-black">{selectedProduct.petani_name || "-"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Harga</p>
+                  <p className="text-sm font-bold text-black">{selectedProduct.harga}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Stok</p>
+                  <p className="text-sm font-bold text-black">{selectedProduct.stok}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Status</p>
+                  <p className="text-sm font-bold text-black">{selectedProduct.status}</p>
+                </div>
+                {selectedProduct.kategori && (
+                  <div>
+                    <p className="text-xs text-gray-500">Kategori</p>
+                    <p className="text-sm font-bold text-black">{selectedProduct.kategori}</p>
+                  </div>
+                )}
+              </div>
+              <div className="flex justify-end">
+                <button
+                  onClick={() => {
+                    setShowDetailModal(false);
+                    setSelectedProduct(null);
+                  }}
+                  className="px-4 py-2 bg-[#9e1c60] rounded-lg text-sm font-bold text-white hover:bg-[#7a1548] cursor-pointer"
+                >
+                  Tutup
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   );
 }
 

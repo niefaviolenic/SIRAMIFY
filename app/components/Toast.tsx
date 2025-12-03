@@ -18,7 +18,7 @@ export default function Toast({ message, type = "success", onClose }: ToastProps
   }, [onClose]);
 
   return (
-    <div className="fixed top-24 right-6 z-50 animate-fade-in-down">
+    <div className="fixed top-24 right-6 z-[60] animate-fade-in-down">
       <div
         className={`flex items-center gap-3 px-6 py-4 rounded-xl shadow-lg border ${type === "success"
           ? "bg-white border-[#9e1c60] text-[#9e1c60]"

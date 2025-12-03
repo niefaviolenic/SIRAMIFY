@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import AdminSidebar from "@/app/components/AdminSidebar";
 import AdminHeader from "@/app/components/AdminHeader";
 import Image from "next/image";
 import { supabase } from "@/utils/supabaseClient";
+import { SkeletonTable } from "@/app/components/SkeletonAdmin";
 
 const imgIconamoonEditLight = "https://www.figma.com/api/mcp/asset/e12eaffa-ec34-4b35-ac23-8b0719bfdc0d";
 const imgMaterialSymbolsDeleteRounded = "https://www.figma.com/api/mcp/asset/2b8b2938-0c34-49e2-b4a7-762bbfa895f7";
@@ -214,52 +214,82 @@ export default function ManajemenUserPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex">
-      {/* Sidebar */}
-      <AdminSidebar />
+    <div className="min-h-screen">
+      <div className="p-8" style={{ paddingLeft: '10px' }}>
+        {/* Header */}
+        <div className="mb-8">
+          <div className="mb-4 flex items-start justify-between gap-4">
+            <div>
+              <h1 className="font-bold text-2xl text-black">Manajemen User</h1>
+              <p className="text-xs text-black mt-1">Kelola semua user sistem</p>
+            </div>
+            <div className="flex-shrink-0">
+              <AdminHeader />
+            </div>
+          </div>
+        </div>
 
-      {/* Main Content */}
-      <div className="flex-1 ml-[200px] min-h-screen">
-        <div className="p-8" style={{ paddingLeft: '10px' }}>
-          {/* Header */}
-          <div className="mb-8">
-            <div className="mb-4 flex items-start justify-between gap-4">
-              <div>
-                <h1 className="font-bold text-2xl text-black">Manajemen User</h1>
-                <p className="text-xs text-black mt-1">Kelola semua user sistem</p>
+        {/* Filters and Search */}
+        <div className="mb-6 flex flex-col md:flex-row gap-4">
+          <div className="flex-1">
+            <input
+              type="text"
+              placeholder="Cari user (email, nama)..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full border border-[#9e1c60] rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
+            />
+          </div>
+          <div className="w-full md:w-48">
+            <select
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+              className="w-full border border-[#9e1c60] rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
+            >
+              <option value="all">Semua Role</option>
+              <option value="petani">Petani</option>
+              <option value="pembeli">Pembeli</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Table */}
+        {isLoading ? (
+          <div className="space-y-6">
+            {/* Header Skeleton */}
+            <div className="flex justify-between items-start">
+              <div className="space-y-2">
+                <div className="h-8 w-48 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>
               </div>
-              <div className="flex-shrink-0">
-                <AdminHeader />
+              <div className="h-10 w-10 bg-gray-200 rounded-full animate-pulse"></div>
+            </div>
+
+            {/* Filters Skeleton */}
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1 h-10 bg-gray-200 rounded-lg animate-pulse"></div>
+              <div className="w-full md:w-48 h-10 bg-gray-200 rounded-lg animate-pulse"></div>
+            </div>
+
+            {/* Table Skeleton */}
+            <div className="border border-gray-200 rounded-[10px] overflow-hidden">
+              <div className="bg-gray-100 h-10 w-full animate-pulse"></div>
+              <div className="p-4 space-y-4">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="flex gap-4">
+                    <div className="h-4 w-1/6 bg-gray-200 rounded animate-pulse"></div>
+                    <div className="h-4 w-1/6 bg-gray-200 rounded animate-pulse"></div>
+                    <div className="h-4 w-1/6 bg-gray-200 rounded animate-pulse"></div>
+                    <div className="h-4 w-1/6 bg-gray-200 rounded animate-pulse"></div>
+                    <div className="h-4 w-1/6 bg-gray-200 rounded animate-pulse"></div>
+                    <div className="h-4 w-1/6 bg-gray-200 rounded animate-pulse"></div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
-
-          {/* Filters and Search */}
-          <div className="mb-6 flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-              <input
-                type="text"
-                placeholder="Cari user (email, nama)..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full border border-[#9e1c60] rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
-              />
-            </div>
-            <div className="w-full md:w-48">
-              <select
-                value={roleFilter}
-                onChange={(e) => setRoleFilter(e.target.value)}
-                className="w-full border border-[#9e1c60] rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
-              >
-                <option value="all">Semua Role</option>
-                <option value="petani">Petani</option>
-                <option value="pembeli">Pembeli</option>
-                <option value="admin">Admin</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Table */}
+        ) : (
           <div className="border border-[#9e1c60] rounded-[10px] overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -295,11 +325,10 @@ export default function ManajemenUserPage() {
                         <td className="px-4 py-3">
                           <button
                             onClick={() => handleToggleStatus(user)}
-                            className={`px-3 py-1 rounded-full text-xs font-bold ${
-                              user.status === "aktif"
-                                ? "bg-green-100 text-green-800"
-                                : "bg-red-100 text-red-800"
-                            }`}
+                            className={`px-3 py-1 rounded-full text-xs font-bold ${user.status === "aktif"
+                              ? "bg-green-100 text-green-800"
+                              : "bg-red-100 text-red-800"
+                              }`}
                           >
                             {user.status === "aktif" ? "Aktif" : "Nonaktif"}
                           </button>
@@ -309,14 +338,14 @@ export default function ManajemenUserPage() {
                           <div className="flex items-center justify-center gap-2">
                             <button
                               onClick={() => handleViewDetail(user)}
-                              className="p-1 hover:bg-gray-200 rounded transition"
+                              className="p-1 hover:bg-gray-200 rounded transition cursor-pointer"
                               title="Detail"
                             >
                               <span className="text-xs text-[#9e1c60]">Detail</span>
                             </button>
                             <button
                               onClick={() => handleEdit(user)}
-                              className="p-1 hover:bg-gray-200 rounded transition"
+                              className="p-1 hover:bg-gray-200 rounded transition cursor-pointer"
                               title="Edit"
                             >
                               <Image
@@ -331,7 +360,7 @@ export default function ManajemenUserPage() {
                             </button>
                             <button
                               onClick={() => handleDeleteClick(user)}
-                              className="p-1 hover:bg-gray-200 rounded transition"
+                              className="p-1 hover:bg-gray-200 rounded transition cursor-pointer"
                               title="Hapus"
                             >
                               <Image
@@ -353,7 +382,7 @@ export default function ManajemenUserPage() {
               </table>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Delete Modal */}
@@ -370,13 +399,13 @@ export default function ManajemenUserPage() {
                   setShowDeleteModal(false);
                   setSelectedUser(null);
                 }}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-50"
+                className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-50 cursor-pointer"
               >
                 Batal
               </button>
               <button
                 onClick={handleDeleteConfirm}
-                className="px-4 py-2 bg-red-600 rounded-lg text-sm font-bold text-white hover:bg-red-700"
+                className="px-4 py-2 bg-red-600 rounded-lg text-sm font-bold text-white hover:bg-red-700 cursor-pointer"
               >
                 Hapus
               </button>
@@ -439,13 +468,13 @@ export default function ManajemenUserPage() {
                   setShowEditModal(false);
                   setSelectedUser(null);
                 }}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-50"
+                className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-50 cursor-pointer"
               >
                 Batal
               </button>
               <button
                 onClick={handleSaveEdit}
-                className="px-4 py-2 bg-[#9e1c60] rounded-lg text-sm font-bold text-white hover:bg-[#7a1548]"
+                className="px-4 py-2 bg-[#9e1c60] rounded-lg text-sm font-bold text-white hover:bg-[#7a1548] cursor-pointer"
               >
                 Simpan
               </button>
@@ -487,7 +516,7 @@ export default function ManajemenUserPage() {
                   setShowDetailModal(false);
                   setSelectedUser(null);
                 }}
-                className="px-4 py-2 bg-[#9e1c60] rounded-lg text-sm font-bold text-white hover:bg-[#7a1548]"
+                className="px-4 py-2 bg-[#9e1c60] rounded-lg text-sm font-bold text-white hover:bg-[#7a1548] cursor-pointer"
               >
                 Tutup
               </button>
