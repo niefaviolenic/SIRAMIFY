@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import React from "react";
 import { supabase } from "@/utils/supabaseClient";
+import Toast from "./Toast";
 
 const imgImage9 = "/profile.png";
 
@@ -27,6 +28,7 @@ export default function ProfilModal({ isOpen, onClose, onUpdate }: ProfilModalPr
   const [isSaving, setIsSaving] = useState(false);
   const [profileImage, setProfileImage] = useState<string>(imgImage9);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -72,13 +74,13 @@ export default function ProfilModal({ isOpen, onClose, onUpdate }: ProfilModalPr
     if (file) {
       // Validasi tipe file
       if (!file.type.startsWith('image/')) {
-        alert('File harus berupa gambar');
+        setToast({ message: 'File harus berupa gambar', type: 'error' });
         return;
       }
 
       // Validasi ukuran file (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
-        alert('Ukuran file maksimal 5MB');
+        setToast({ message: 'Ukuran file maksimal 5MB', type: 'error' });
         return;
       }
 
@@ -137,7 +139,7 @@ export default function ProfilModal({ isOpen, onClose, onUpdate }: ProfilModalPr
       // Update auth password if provided
       if (formData.passwordBaru) {
         if (formData.passwordBaru !== formData.konfirmasiPasswordBaru) {
-          alert("Password baru dan konfirmasi tidak cocok");
+          setToast({ message: "Password baru dan konfirmasi tidak cocok", type: "error" });
           setIsSaving(false);
           return;
         }
@@ -157,14 +159,21 @@ export default function ProfilModal({ isOpen, onClose, onUpdate }: ProfilModalPr
         if (emailError) throw emailError;
       }
 
-      alert("Profil berhasil diperbarui!");
+      // Dispatch event to trigger skeleton load in parent pages
+      window.dispatchEvent(new Event('refresh-admin-data'));
+
+      // Dispatch global toast
+      window.dispatchEvent(new CustomEvent('show-toast', {
+        detail: { message: "Profil berhasil diperbarui!", type: "success" }
+      }));
+
       onClose();
+
       // Refresh data
-      fetchUserData();
       if (onUpdate) onUpdate();
     } catch (error: any) {
       console.error("Error updating profile:", error);
-      alert(`Gagal memperbarui profil: ${error.message}`);
+      setToast({ message: `Gagal memperbarui profil: ${error.message}`, type: "error" });
     } finally {
       setIsSaving(false);
     }
@@ -180,6 +189,13 @@ export default function ProfilModal({ isOpen, onClose, onUpdate }: ProfilModalPr
         backgroundColor: 'rgba(255, 255, 255, 0.5)'
       }}
     >
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
       <div
         className="bg-white rounded-[15px] border-2 border-[#9e1c60] p-6 max-w-[850px] w-full mx-4 relative my-auto"
         onClick={(e) => e.stopPropagation()}
@@ -346,6 +362,7 @@ export default function ProfilModal({ isOpen, onClose, onUpdate }: ProfilModalPr
                   value={formData.passwordBaru}
                   onChange={(e) => setFormData({ ...formData, passwordBaru: e.target.value })}
                   placeholder="Masukkan Password Baru Anda"
+                  autoComplete="new-password"
                   className={`bg-[#f5f5f5] h-[35px] px-3 py-2 pr-10 rounded-[5px] outline-none focus:ring-2 focus:ring-[#9e1c60] w-full transition-all ${formData.passwordBaru ? 'text-black' : 'text-black/50'}`}
                   style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '13px' }}
                 />
@@ -388,6 +405,7 @@ export default function ProfilModal({ isOpen, onClose, onUpdate }: ProfilModalPr
                   value={formData.konfirmasiPasswordBaru}
                   onChange={(e) => setFormData({ ...formData, konfirmasiPasswordBaru: e.target.value })}
                   placeholder="Konfirmasi Password Baru"
+                  autoComplete="new-password"
                   className={`bg-[#f5f5f5] h-[35px] px-3 py-2 pr-10 rounded-[5px] outline-none focus:ring-2 focus:ring-[#9e1c60] w-full transition-all ${formData.konfirmasiPasswordBaru ? 'text-black' : 'text-black/50'}`}
                   style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '13px' }}
                 />

@@ -227,11 +227,21 @@ export default function DaftarPage() {
       }
 
       // Tampilkan success message di halaman (tanpa alert)
-      setSuccessMessage("Pendaftaran berhasil! Mengarahkan ke halaman masuk...");
+      setSuccessMessage("Pendaftaran berhasil! Mengarahkan...");
 
-      // Auto redirect ke halaman masuk setelah 1.5 detik (tanpa perlu klik OK)
+      // Auto redirect ke halaman yang sesuai setelah 1.5 detik
       setTimeout(() => {
-        router.push("/masuk");
+        if (authData.session) {
+          // Jika sudah ada session (auto login), redirect sesuai role
+          if (role === "petani") {
+            router.push("/");
+          } else {
+            router.push("/");
+          }
+        } else {
+          // Jika butuh verifikasi email atau tidak auto login
+          router.push("/masuk");
+        }
       }, 1500);
     } catch (error: any) {
       console.error("Registration error:", error);

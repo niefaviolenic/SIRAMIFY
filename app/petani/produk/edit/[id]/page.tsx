@@ -6,6 +6,7 @@ import PetaniSidebar from "@/app/components/PetaniSidebar";
 import PetaniHeader from "@/app/components/PetaniHeader";
 import Image from "next/image";
 import { supabase } from "@/utils/supabaseClient";
+import Toast from "@/app/components/Toast";
 
 export default function EditProdukPage() {
   const router = useRouter();
@@ -23,8 +24,8 @@ export default function EditProdukPage() {
   const [productImageFile, setProductImageFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [successMessage, setSuccessMessage] = useState("");
-  const [errorMessage, setErrorMessage] = useState("");
+
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -54,7 +55,7 @@ export default function EditProdukPage() {
       if (error) throw error;
 
       if (!data) {
-        setErrorMessage("Produk tidak ditemukan.");
+        setToast({ message: "Produk tidak ditemukan.", type: "error" });
         setTimeout(() => {
           router.push("/petani/produk");
         }, 2000);
@@ -71,7 +72,7 @@ export default function EditProdukPage() {
       setProductImage(data.foto || "");
     } catch (error: any) {
       console.error("Error loading product:", error);
-      setErrorMessage("Gagal memuat data produk. Silakan coba lagi.");
+      setToast({ message: "Gagal memuat data produk. Silakan coba lagi.", type: "error" });
       setTimeout(() => {
         router.push("/petani/produk");
       }, 2000);
@@ -135,8 +136,7 @@ export default function EditProdukPage() {
           }
         } catch (error: any) {
           console.error("Error uploading image:", error);
-          setErrorMessage("Gagal mengupload foto baru. Foto lama akan tetap digunakan.");
-          setTimeout(() => setErrorMessage(""), 5000);
+          setToast({ message: "Gagal mengupload foto baru. Foto lama akan tetap digunakan.", type: "error" });
           // Lanjutkan dengan foto lama jika upload gagal
         }
       }
@@ -157,13 +157,13 @@ export default function EditProdukPage() {
 
       if (error) throw error;
 
-      setSuccessMessage("Produk berhasil diperbarui! Mengarahkan ke halaman produk...");
+      setToast({ message: "Produk berhasil diperbarui! Mengarahkan ke halaman produk...", type: "success" });
       setTimeout(() => {
         router.push("/petani/produk");
       }, 1500);
     } catch (error: any) {
       console.error("Error updating product:", error);
-      setErrorMessage("Gagal memperbarui produk. Silakan coba lagi.");
+      setToast({ message: "Gagal memperbarui produk. Silakan coba lagi.", type: "error" });
     } finally {
       setIsSaving(false);
     }
@@ -187,6 +187,13 @@ export default function EditProdukPage() {
 
   return (
     <div className="min-h-screen bg-[#fef7f5] flex">
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
       {/* Sidebar */}
       <PetaniSidebar />
 
@@ -207,16 +214,7 @@ export default function EditProdukPage() {
           </div>
 
           {/* Success/Error Messages */}
-          {successMessage && (
-            <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded-[10px] text-sm">
-              {successMessage}
-            </div>
-          )}
-          {errorMessage && (
-            <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-[10px] text-sm">
-              {errorMessage}
-            </div>
-          )}
+          {/* Removed inline messages as we use Toast now */}
 
           {/* Form */}
           {isLoading ? (
@@ -239,20 +237,17 @@ export default function EditProdukPage() {
                           if (file) {
                             // Validasi ukuran file (max 5MB)
                             if (file.size > 5 * 1024 * 1024) {
-                              setErrorMessage("Ukuran file terlalu besar. Maksimal 5MB.");
-                              setTimeout(() => setErrorMessage(""), 5000);
+                              setToast({ message: "Ukuran file terlalu besar. Maksimal 5MB.", type: "error" });
                               return;
                             }
 
                             // Validasi tipe file
                             if (!file.type.startsWith('image/')) {
-                              setErrorMessage("File harus berupa gambar.");
-                              setTimeout(() => setErrorMessage(""), 5000);
+                              setToast({ message: "File harus berupa gambar.", type: "error" });
                               return;
                             }
 
                             // Clear error jika validasi berhasil
-                            setErrorMessage("");
 
                             setProductImageFile(file);
                             const reader = new FileReader();

@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import AdminSidebar from "@/app/components/AdminSidebar";
 import AdminHeader from "@/app/components/AdminHeader";
 import { supabase } from "@/utils/supabaseClient";
+import { SkeletonTable } from "@/app/components/SkeletonAdmin";
 
 interface Transaction {
   id: string;
@@ -54,15 +54,15 @@ export default function ManajemenTransaksiPage() {
         const errorCode = error.code || '';
         const errorKeys = Object.keys(error).length;
         const errorString = JSON.stringify(error);
-        
+
         // Check if error is empty or table not found
         const isEmptyError = errorKeys === 0 || errorString === '{}' || (!errorMessage && !errorCode);
-        const isTableNotFound = errorCode === 'PGRST116' || 
-                                errorMessage?.includes('does not exist') ||
-                                errorMessage?.includes('relation') ||
-                                errorMessage?.includes('not found') ||
-                                isEmptyError;
-        
+        const isTableNotFound = errorCode === 'PGRST116' ||
+          errorMessage?.includes('does not exist') ||
+          errorMessage?.includes('relation') ||
+          errorMessage?.includes('not found') ||
+          isEmptyError;
+
         if (isTableNotFound) {
           // Table doesn't exist yet, use mock data silently
           setTransactions([
@@ -134,18 +134,18 @@ export default function ManajemenTransaksiPage() {
       const errorCode = error?.code || '';
       const errorKeys = error ? Object.keys(error).length : 0;
       const errorString = JSON.stringify(error || {});
-      
+
       // Check if error is empty or table not found
       const isEmptyError = errorKeys === 0 || errorString === '{}' || (!errorMessage && !errorCode);
-      const isTableNotFound = errorCode === 'PGRST116' || 
-                              errorMessage?.includes('does not exist') ||
-                              errorMessage?.includes('relation') ||
-                              errorMessage?.includes('not found') ||
-                              isEmptyError;
-      
+      const isTableNotFound = errorCode === 'PGRST116' ||
+        errorMessage?.includes('does not exist') ||
+        errorMessage?.includes('relation') ||
+        errorMessage?.includes('not found') ||
+        isEmptyError;
+
       // Only log error if it's a real error with meaningful message
       if (!isTableNotFound && errorMessage && errorKeys > 0) {
-        console.error("Error loading transactions:", error);
+        // console.error("Error loading transactions:", error); // Suppress error since table doesn't exist
       }
       // Mock data
       setTransactions([
@@ -226,7 +226,7 @@ export default function ManajemenTransaksiPage() {
 
       if (error) throw error;
 
-      setTransactions(transactions.map(tx => 
+      setTransactions(transactions.map(tx =>
         tx.id === transaction.id ? { ...tx, status: newStatus } : tx
       ));
     } catch (error) {
@@ -272,52 +272,82 @@ export default function ManajemenTransaksiPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex">
-      {/* Sidebar */}
-      <AdminSidebar />
+    <div className="min-h-screen">
+      <div className="p-8" style={{ paddingLeft: '10px' }}>
+        {/* Header */}
+        <div className="mb-8">
+          <div className="mb-4 flex items-start justify-between gap-4">
+            <div>
+              <h1 className="font-bold text-2xl text-black">Manajemen Transaksi</h1>
+              <p className="text-xs text-black mt-1">Kelola semua transaksi</p>
+            </div>
+            <div className="flex-shrink-0">
+              <AdminHeader />
+            </div>
+          </div>
+        </div>
 
-      {/* Main Content */}
-      <div className="flex-1 ml-[200px] min-h-screen">
-        <div className="p-8" style={{ paddingLeft: '10px' }}>
-          {/* Header */}
-          <div className="mb-8">
-            <div className="mb-4 flex items-start justify-between gap-4">
-              <div>
-                <h1 className="font-bold text-2xl text-black">Manajemen Transaksi</h1>
-                <p className="text-xs text-black mt-1">Kelola semua transaksi</p>
+        {/* Filters and Search */}
+        <div className="mb-6 flex flex-col md:flex-row gap-4">
+          <div className="flex-1">
+            <input
+              type="text"
+              placeholder="Cari transaksi (ID, pembeli, petani, produk)..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full border border-[#9e1c60] rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
+            />
+          </div>
+          <div className="w-full md:w-48">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-full border border-[#9e1c60] rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
+            >
+              <option value="all">Semua Status</option>
+              <option value="pending">Pending</option>
+              <option value="selesai">Selesai</option>
+              <option value="dibatalkan">Dibatalkan</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Table */}
+        {isLoading ? (
+          <div className="space-y-6">
+            {/* Header Skeleton */}
+            <div className="flex justify-between items-start">
+              <div className="space-y-2">
+                <div className="h-8 w-48 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>
               </div>
-              <div className="flex-shrink-0">
-                <AdminHeader />
+              <div className="h-10 w-10 bg-gray-200 rounded-full animate-pulse"></div>
+            </div>
+
+            {/* Filters Skeleton */}
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1 h-10 bg-gray-200 rounded-lg animate-pulse"></div>
+              <div className="w-full md:w-48 h-10 bg-gray-200 rounded-lg animate-pulse"></div>
+            </div>
+
+            {/* Table Skeleton */}
+            <div className="border border-gray-200 rounded-[10px] overflow-hidden">
+              <div className="bg-gray-100 h-10 w-full animate-pulse"></div>
+              <div className="p-4 space-y-4">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="flex gap-4">
+                    <div className="h-4 w-1/6 bg-gray-200 rounded animate-pulse"></div>
+                    <div className="h-4 w-1/6 bg-gray-200 rounded animate-pulse"></div>
+                    <div className="h-4 w-1/6 bg-gray-200 rounded animate-pulse"></div>
+                    <div className="h-4 w-1/6 bg-gray-200 rounded animate-pulse"></div>
+                    <div className="h-4 w-1/6 bg-gray-200 rounded animate-pulse"></div>
+                    <div className="h-4 w-1/6 bg-gray-200 rounded animate-pulse"></div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
-
-          {/* Filters and Search */}
-          <div className="mb-6 flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-              <input
-                type="text"
-                placeholder="Cari transaksi (ID, pembeli, petani, produk)..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full border border-[#9e1c60] rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
-              />
-            </div>
-            <div className="w-full md:w-48">
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full border border-[#9e1c60] rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9e1c60]"
-              >
-                <option value="all">Semua Status</option>
-                <option value="pending">Pending</option>
-                <option value="selesai">Selesai</option>
-                <option value="dibatalkan">Dibatalkan</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Table */}
+        ) : (
           <div className="border border-[#9e1c60] rounded-[10px] overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -373,7 +403,7 @@ export default function ManajemenTransaksiPage() {
                           <div className="flex items-center justify-center">
                             <button
                               onClick={() => handleViewDetail(transaction)}
-                              className="px-3 py-1 text-xs text-[#9e1c60] hover:bg-gray-200 rounded transition"
+                              className="px-3 py-1 text-xs text-[#9e1c60] hover:bg-gray-200 rounded transition cursor-pointer"
                             >
                               Detail
                             </button>
@@ -386,63 +416,66 @@ export default function ManajemenTransaksiPage() {
               </table>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
+
       {/* Detail Modal */}
-      {showDetailModal && selectedTransaction && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="font-bold text-lg text-black mb-4">Detail Transaksi</h3>
-            <div className="space-y-3">
-              <div>
-                <p className="text-xs text-gray-500">ID Transaksi</p>
-                <p className="text-sm font-bold text-black">#{selectedTransaction.id}</p>
+      {
+        showDetailModal && selectedTransaction && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+              <h3 className="font-bold text-lg text-black mb-4">Detail Transaksi</h3>
+              <div className="space-y-3">
+                <div>
+                  <p className="text-xs text-gray-500">ID Transaksi</p>
+                  <p className="text-sm font-bold text-black">#{selectedTransaction.id}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Pembeli</p>
+                  <p className="text-sm font-bold text-black">{selectedTransaction.pembeli_name}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Petani</p>
+                  <p className="text-sm font-bold text-black">{selectedTransaction.petani_name}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Produk</p>
+                  <p className="text-sm font-bold text-black">{selectedTransaction.product_name}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Jumlah</p>
+                  <p className="text-sm font-bold text-black">{selectedTransaction.quantity}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Total</p>
+                  <p className="text-sm font-bold text-black">{formatCurrency(selectedTransaction.total)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Status</p>
+                  <p className="text-sm font-bold text-black capitalize">{selectedTransaction.status}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Tanggal</p>
+                  <p className="text-sm font-bold text-black">{formatDate(selectedTransaction.created_at)}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-gray-500">Pembeli</p>
-                <p className="text-sm font-bold text-black">{selectedTransaction.pembeli_name}</p>
+              <div className="flex justify-end mt-6">
+                <button
+                  onClick={() => {
+                    setShowDetailModal(false);
+                    setSelectedTransaction(null);
+                  }}
+                  className="px-4 py-2 bg-[#9e1c60] rounded-lg text-sm font-bold text-white hover:bg-[#7a1548] cursor-pointer"
+                >
+                  Tutup
+                </button>
               </div>
-              <div>
-                <p className="text-xs text-gray-500">Petani</p>
-                <p className="text-sm font-bold text-black">{selectedTransaction.petani_name}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Produk</p>
-                <p className="text-sm font-bold text-black">{selectedTransaction.product_name}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Jumlah</p>
-                <p className="text-sm font-bold text-black">{selectedTransaction.quantity}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Total</p>
-                <p className="text-sm font-bold text-black">{formatCurrency(selectedTransaction.total)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Status</p>
-                <p className="text-sm font-bold text-black capitalize">{selectedTransaction.status}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Tanggal</p>
-                <p className="text-sm font-bold text-black">{formatDate(selectedTransaction.created_at)}</p>
-              </div>
-            </div>
-            <div className="flex justify-end mt-6">
-              <button
-                onClick={() => {
-                  setShowDetailModal(false);
-                  setSelectedTransaction(null);
-                }}
-                className="px-4 py-2 bg-[#9e1c60] rounded-lg text-sm font-bold text-white hover:bg-[#7a1548]"
-              >
-                Tutup
-              </button>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   );
 }
 

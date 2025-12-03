@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import PetaniSidebar from "@/app/components/PetaniSidebar";
 import PetaniHeader from "@/app/components/PetaniHeader";
 import { supabase } from "@/utils/supabaseClient";
+import Toast from "@/app/components/Toast";
 
 export default function TambahProdukPage() {
   const router = useRouter();
@@ -18,29 +19,27 @@ export default function TambahProdukPage() {
   });
   const [productImage, setProductImage] = useState<string | null>(null);
   const [productImageFile, setProductImageFile] = useState<File | null>(null);
+
+
   const [isSaving, setIsSaving] = useState(false);
-  const [successMessage, setSuccessMessage] = useState("");
-  const [errorMessage, setErrorMessage] = useState("");
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       // Validasi ukuran file (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
-        setErrorMessage("Ukuran file terlalu besar. Maksimal 5MB.");
-        setTimeout(() => setErrorMessage(""), 5000);
+        setToast({ message: "Ukuran file terlalu besar. Maksimal 5MB.", type: "error" });
         return;
       }
 
       // Validasi tipe file
       if (!file.type.startsWith('image/')) {
-        setErrorMessage("File harus berupa gambar.");
-        setTimeout(() => setErrorMessage(""), 5000);
+        setToast({ message: "File harus berupa gambar.", type: "error" });
         return;
       }
 
       // Clear error jika validasi berhasil
-      setErrorMessage("");
 
       setProductImageFile(file);
       const reader = new FileReader();
@@ -103,19 +102,19 @@ export default function TambahProdukPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
-    setErrorMessage("");
-    setSuccessMessage("");
+
+
 
     try {
       // Validasi form
       if (!formData.nama.trim()) {
-        setErrorMessage("Nama produk harus diisi!");
+        setToast({ message: "Nama produk harus diisi!", type: "error" });
         setIsSaving(false);
         return;
       }
 
       if (!formData.harga || parseInt(formData.harga.replace(/\D/g, '') || '0') <= 0) {
-        setErrorMessage("Harga produk harus diisi dan lebih dari 0!");
+        setToast({ message: "Harga produk harus diisi dan lebih dari 0!", type: "error" });
         setIsSaving(false);
         return;
       }
@@ -124,13 +123,14 @@ export default function TambahProdukPage() {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) {
         console.error("User error:", userError);
-        setErrorMessage("Anda harus login terlebih dahulu!");
+        setToast({ message: "Anda harus login terlebih dahulu!", type: "error" });
         setTimeout(() => {
           router.push("/masuk");
         }, 2000);
         setIsSaving(false);
         return;
       }
+
 
       console.log("Adding product for user:", user.id);
       console.log("Form data:", formData);
@@ -150,9 +150,9 @@ export default function TambahProdukPage() {
             message: errorMessage,
             error: error
           });
+
           // Jika upload foto gagal, tetap lanjutkan tanpa foto
-          setErrorMessage(`Gagal mengupload foto: ${errorMessage}. Produk akan disimpan tanpa foto.`);
-          setTimeout(() => setErrorMessage(""), 5000);
+          setToast({ message: `Gagal mengupload foto: ${errorMessage}. Produk akan disimpan tanpa foto.`, type: "error" });
         }
       } else if (productImage && !productImage.startsWith('http')) {
         // Jika masih base64 (fallback), simpan sebagai base64
@@ -192,7 +192,9 @@ export default function TambahProdukPage() {
 
       console.log("Product inserted successfully:", insertedData);
 
-      setSuccessMessage("Produk berhasil ditambahkan! Mengarahkan ke halaman produk...");
+
+
+      setToast({ message: "Produk berhasil ditambahkan! Mengarahkan ke halaman produk...", type: "success" });
       setTimeout(() => {
         router.push("/petani/produk");
       }, 1500);
@@ -211,7 +213,8 @@ export default function TambahProdukPage() {
       }
 
       console.error("Full error object:", JSON.stringify(error, null, 2));
-      setErrorMessage(errorMsg);
+
+      setToast({ message: errorMsg, type: "error" });
     } finally {
       setIsSaving(false);
     }
@@ -235,6 +238,13 @@ export default function TambahProdukPage() {
 
   return (
     <div className="min-h-screen bg-[#fef7f5] flex">
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
       {/* Sidebar */}
       <PetaniSidebar />
 
@@ -255,16 +265,7 @@ export default function TambahProdukPage() {
           </div>
 
           {/* Success/Error Messages */}
-          {successMessage && (
-            <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded-[10px] text-sm">
-              {successMessage}
-            </div>
-          )}
-          {errorMessage && (
-            <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-[10px] text-sm">
-              {errorMessage}
-            </div>
-          )}
+          {/* Removed inline messages as we use Toast now */}
 
           {/* Form */}
           <form onSubmit={handleSubmit}>

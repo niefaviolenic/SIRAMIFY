@@ -232,17 +232,18 @@ export default function MasukPage() {
     console.log("Redirecting based on role:", role, "-> normalized:", normalizedRole);
 
     if (normalizedRole === "petani") {
-      console.log("✅ Redirecting to /petani/beranda");
-      router.push("/petani/beranda");
+      console.log("✅ Redirecting to /");
+      router.push("/");
     } else if (normalizedRole === "admin") {
-      console.log("✅ Redirecting to /admin/beranda");
-      router.push("/admin/beranda");
+      console.log("✅ Redirecting to /");
+      router.push("/");
+    } else if (normalizedRole === "pembeli") {
+      console.log("✅ Redirecting to /");
+      router.push("/");
     } else {
-      // Default untuk pembeli atau role lainnya
+      // Default untuk role lainnya
       console.log("⚠️ Unknown role, redirecting to landing page. Role was:", role);
-      // Jika belum ada halaman pembeli, redirect ke landing page atau buat halaman pembeli
-      router.push("/"); // Sementara redirect ke landing page
-      // TODO: Buat halaman /pembeli/beranda jika diperlukan
+      router.push("/");
     }
   };
 
