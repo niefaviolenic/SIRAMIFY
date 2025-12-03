@@ -6,6 +6,7 @@ import PetaniSidebar from "@/app/components/PetaniSidebar";
 import PetaniHeader from "@/app/components/PetaniHeader";
 import Image from "next/image";
 import { supabase } from "@/utils/supabaseClient";
+import Toast from "@/app/components/Toast";
 
 const imgIconamoonEditLight = "https://www.figma.com/api/mcp/asset/e12eaffa-ec34-4b35-ac23-8b0719bfdc0d";
 const imgMaterialSymbolsDeleteRounded = "https://www.figma.com/api/mcp/asset/2b8b2938-0c34-49e2-b4a7-762bbfa895f7";
@@ -27,6 +28,7 @@ export default function ProdukPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   useEffect(() => {
     loadProducts();
@@ -35,7 +37,7 @@ export default function ProdukPage() {
   const loadProducts = async () => {
     try {
       setIsLoading(true);
-      
+
       // Get current user
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) {
@@ -63,16 +65,19 @@ export default function ProdukPage() {
 
       // Map data ke format yang dibutuhkan
       const mappedProducts: Product[] = (data || []).map((item: any, index: number) => {
+        const stock = item.stok || 0;
+        const maxStock = item.stok_max || 1000;
+
         // Hitung status berdasarkan stok
         let status: "Tersedia" | "Stok Menipis" | "Habis" = "Tersedia";
-        if (item.stok === 0) {
+        if (stock === 0) {
           status = "Habis";
-        } else if (item.stok <= 100) {
+        } else if (stock <= 100) {
           status = "Stok Menipis";
         }
 
         // Format harga ke "RpX.XXX"
-        const hargaFormatted = `Rp${item.harga.toLocaleString("id-ID")}`;
+        const hargaFormatted = `Rp${(item.harga || 0).toLocaleString("id-ID")}`;
 
         return {
           id: item.id,
@@ -80,7 +85,7 @@ export default function ProdukPage() {
           foto: item.foto || "https://via.placeholder.com/100x60",
           namaProduk: item.nama,
           harga: hargaFormatted,
-          stok: `${item.stok}/${item.stok_max.toLocaleString("id-ID")}`,
+          stok: `${stock}/${maxStock.toLocaleString("id-ID")}`,
           status: status,
         };
       });
@@ -88,7 +93,7 @@ export default function ProdukPage() {
       setProducts(mappedProducts);
     } catch (error: any) {
       console.error("Error loading products:", error);
-      alert("Gagal memuat produk. Silakan coba lagi.");
+      setToast({ message: "Gagal memuat produk. Silakan coba lagi.", type: "error" });
       setProducts([]);
     } finally {
       setIsLoading(false);
@@ -132,9 +137,10 @@ export default function ProdukPage() {
       loadProducts();
       setShowDeleteModal(false);
       setDeleteId(null);
+      setToast({ message: "Produk berhasil dihapus!", type: "success" });
     } catch (error: any) {
       console.error("Error deleting product:", error);
-      alert("Gagal menghapus produk. Silakan coba lagi.");
+      setToast({ message: "Gagal menghapus produk. Silakan coba lagi.", type: "error" });
       setShowDeleteModal(false);
       setDeleteId(null);
     }
@@ -151,6 +157,13 @@ export default function ProdukPage() {
 
   return (
     <div className="min-h-screen bg-[#fef7f5] flex">
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
       {/* Sidebar */}
       <PetaniSidebar />
 
@@ -313,7 +326,7 @@ export default function ProdukPage() {
                       <tr
                         key={product.id}
                         className="h-[50px] border-b border-[#9e1c60]/15 last:border-b-0 transition"
-                        style={{ 
+                        style={{
                           background: 'linear-gradient(to bottom, #ffffff 0%, #faf8fb 100%)',
                         }}
                         onMouseEnter={(e) => {
@@ -353,7 +366,7 @@ export default function ProdukPage() {
                           <div className="flex items-center justify-center">
                             <div
                               className="rounded-[10px] px-2 py-1 h-[24px] flex items-center justify-center"
-                              style={{ 
+                              style={{
                                 backgroundColor: getStatusColor(product.status),
                                 width: '100px',
                                 minWidth: '100px',
@@ -388,7 +401,7 @@ export default function ProdukPage() {
                               title="Delete"
                             >
                               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M6 19C6 20.1 6.9 21 8 21H16C17.1 21 18 20.1 18 19V7H6V19ZM19 4H15.5L14.5 3H9.5L8.5 4H5V6H19V4Z" fill="#dc2626"/>
+                                <path d="M6 19C6 20.1 6.9 21 8 21H16C17.1 21 18 20.1 18 19V7H6V19ZM19 4H15.5L14.5 3H9.5L8.5 4H5V6H19V4Z" fill="#dc2626" />
                               </svg>
                             </button>
                           </div>
@@ -405,19 +418,19 @@ export default function ProdukPage() {
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
-        <div 
+        <div
           className="fixed inset-0 flex items-center justify-center z-50 py-8"
           onClick={handleDeleteCancel}
-          style={{ 
+          style={{
             animation: 'fadeIn 0.2s ease-in-out',
             fontFamily: 'Arial, Helvetica, sans-serif',
             backgroundColor: 'rgba(255, 255, 255, 0.5)'
           }}
         >
-          <div 
+          <div
             className="rounded-[15px] p-8 max-w-sm w-full mx-4 relative shadow-2xl"
             onClick={(e) => e.stopPropagation()}
-            style={{ 
+            style={{
               background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)',
               animation: 'slideUp 0.3s ease-out',
               fontFamily: 'Arial, Helvetica, sans-serif'
@@ -429,14 +442,14 @@ export default function ProdukPage() {
                 <span className="text-4xl text-[#9e1c60] font-bold leading-none">!</span>
               </div>
             </div>
-            
+
             {/* Message */}
             <div className="text-center mb-8">
               <p className="text-[#181818] text-lg font-normal leading-relaxed" style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}>
                 Anda yakin ingin menghapus produk tersebut?
               </p>
             </div>
-            
+
             {/* Buttons */}
             <div className="flex gap-3">
               <button
