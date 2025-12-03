@@ -38,10 +38,16 @@ export default function BerandaPage() {
   const [isLoadingPrediction, setIsLoadingPrediction] = useState(false);
   const [mlError, setMlError] = useState<string | null>(null);
   const [chartData, setChartData] = useState<MonitoringData[]>([]);
+  const [productStats, setProductStats] = useState({
+    total: 0,
+    tersedia: 0,
+    habis: 0
+  });
 
   useEffect(() => {
     loadUserData();
     loadMonitoringData();
+    loadProductStats();
   }, []);
 
   useEffect(() => {
@@ -55,14 +61,42 @@ export default function BerandaPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const name = user.user_metadata?.full_name || 
-                     user.user_metadata?.name || 
-                     user.email?.split('@')[0] || 
-                     "Petani";
+        const name = user.user_metadata?.full_name ||
+          user.user_metadata?.name ||
+          user.email?.split('@')[0] ||
+          "Petani";
         setUserName(name);
       }
     } catch (error) {
       console.error("Error loading user:", error);
+    }
+  };
+
+  const loadProductStats = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: products, error } = await supabase
+        .from("produk")
+        .select("stok")
+        .eq("petani_id", user.id);
+
+      if (error) throw error;
+
+      if (products) {
+        const total = products.length;
+        const tersedia = products.filter((p: any) => p.stok > 0).length;
+        const habis = products.filter((p: any) => p.stok === 0).length;
+
+        setProductStats({
+          total,
+          tersedia,
+          habis
+        });
+      }
+    } catch (error) {
+      console.error("Error loading product stats:", error);
     }
   };
 
@@ -71,44 +105,44 @@ export default function BerandaPage() {
       setIsLoading(true);
       // Ambil semua data untuk sorting yang benar (karena Tanggal adalah TEXT)
       // Supabase default limit adalah 1000, jadi kita perlu fetch dalam batch
-      
+
       // Pertama, ambil count
       const { count, error: countError } = await supabase
         .from("penyiraman")
         .select("*", { count: "exact", head: true });
-      
+
       if (countError) {
         console.error("Error counting records:", countError);
         setIsLoading(false);
         return;
       }
-      
+
       // Fetch semua data dalam batch (1000 per batch)
       let allData: any[] = [];
       const batchSize = 1000;
       const totalBatches = count ? Math.ceil(count / batchSize) : 1;
-      
+
       for (let i = 0; i < totalBatches; i++) {
         const from = i * batchSize;
         const to = Math.min((i + 1) * batchSize - 1, (count || 0) - 1);
-        
+
         const { data: batchData, error: batchError } = await supabase
           .from("penyiraman")
           .select("*")
           .range(from, to);
-        
+
         if (batchError) {
           console.error(`Error fetching batch ${i + 1}:`, batchError);
           break;
         }
-        
+
         if (batchData) {
           allData = [...allData, ...batchData];
         }
       }
-      
+
       console.log("Total data fetched for beranda:", allData.length);
-      
+
       const latestError = null; // Error sudah di-handle di dalam loop
 
       // Helper function untuk parse tanggal dari format "DD/MM/YYYY HH:MM" menjadi Date object
@@ -150,34 +184,34 @@ export default function BerandaPage() {
 
         // Group data berdasarkan tanggal dan hitung rata-rata
         const dataByTanggal = new Map<string, { suhu: number[], kelembapan: number[], tanggal: string }>();
-        
+
         sortedData.forEach((item: any) => {
           const tanggalValue = item.Tanggal || item.tanggal || item.TANGGAL || "";
           if (tanggalValue) {
             // Ambil hanya bagian tanggal (DD/MM/YYYY) tanpa waktu
             const parts = tanggalValue.toString().trim().split(" ");
             const datePart = parts[0]; // "DD/MM/YYYY"
-            
+
             if (datePart) {
               const suhuValue = item.Suhu || item.suhu || item.SUHU || 0;
               const kelembapanValue = item.Kelembapan || item.kelembapan || item.KELEMBAPAN || 0;
-              
+
               if (!dataByTanggal.has(datePart)) {
                 dataByTanggal.set(datePart, { suhu: [], kelembapan: [], tanggal: datePart });
               }
-              
+
               const existing = dataByTanggal.get(datePart)!;
               existing.suhu.push(suhuValue);
               existing.kelembapan.push(kelembapanValue);
             }
           }
         });
-        
+
         // Hitung rata-rata untuk setiap tanggal
         const averagedData = Array.from(dataByTanggal.values()).map((group) => {
           const avgSuhu = group.suhu.reduce((sum, val) => sum + val, 0) / group.suhu.length;
           const avgKelembapan = group.kelembapan.reduce((sum, val) => sum + val, 0) / group.kelembapan.length;
-          
+
           return {
             tanggal: group.tanggal,
             suhu: avgSuhu,
@@ -185,14 +219,14 @@ export default function BerandaPage() {
             status: "Normal" as "Kering" | "Normal" | "Basah", // Status akan dihitung nanti
           };
         });
-        
+
         // Sort berdasarkan tanggal (terlama ke terbaru) untuk grafik
         const sortedAveragedData = averagedData.sort((a, b) => {
           const dateA = parseTanggalToDate(a.tanggal);
           const dateB = parseTanggalToDate(b.tanggal);
           return dateA.getTime() - dateB.getTime(); // Ascending: terlama ke terbaru
         });
-        
+
         // Ambil 7 tanggal terbaru (atau semua jika kurang dari 7)
         chartDataRaw = sortedAveragedData.slice(-7);
       }
@@ -209,7 +243,7 @@ export default function BerandaPage() {
         const item = latestData[0];
         const suhuValue = item.Suhu || item.suhu || item.SUHU || 0;
         const kelembapanValue = item.Kelembapan || item.kelembapan || item.KELEMBAPAN || 0;
-        
+
         // Tentukan status berdasarkan kelembapan
         let status: "Kering" | "Normal" | "Basah" = "Normal";
         if (kelembapanValue < 55) {
@@ -233,7 +267,7 @@ export default function BerandaPage() {
         const processedChartData = chartDataRaw.map((item: any) => {
           const suhuValue = item.suhu || 0;
           const kelembapanValue = item.kelembapan || 0;
-          
+
           // Format tanggal untuk display (DD/MM)
           const dateParts = item.tanggal.split("/");
           const tanggal = dateParts.length === 3 ? `${dateParts[0]}/${dateParts[1]}` : item.tanggal;
@@ -268,13 +302,13 @@ export default function BerandaPage() {
     if (isLoadingPrediction || !currentData.suhu || !currentData.kelembapan) {
       return;
     }
-    
+
     setIsLoadingPrediction(true);
     setMlError(null);
     try {
       const currentHour = new Date().getHours();
       const prediction = await predictStatus(currentData.suhu, currentData.kelembapan, currentHour);
-      
+
       if (prediction && prediction.status) {
         setMlPrediction(prediction.status);
         setMlPredictionData({
@@ -282,7 +316,7 @@ export default function BerandaPage() {
           prediksi_kelembapan: prediction.prediksi_kelembapan,
         });
         setMlError(null);
-        
+
         setCurrentData(prev => ({
           ...prev,
           status: prediction.status as "Kering" | "Normal" | "Basah",
@@ -550,7 +584,7 @@ export default function BerandaPage() {
           </div>
 
           {/* Welcome Banner - JANGAN DIUBAH */}
-          <div 
+          <div
             className="mb-6 relative rounded-[15px] overflow-visible"
             style={{
               background: 'linear-gradient(135deg, #fceef5 0%, #f5d8e5 25%, #eed2e1 50%, #e6c4d2 75%, #ddb5c3 100%)',
@@ -571,7 +605,7 @@ export default function BerandaPage() {
                 </div>
               </div>
             </div>
-            
+
             {/* Farmer Image */}
             <div className="absolute right-8 md:right-12 bottom-0 w-[180px] h-[180px] md:w-[190px] md:h-[190px] -mt-4 md:-mt-1 z-20 transform translate-y-2 md:translate-y-2">
               <Image
@@ -725,22 +759,20 @@ export default function BerandaPage() {
                 <div className="flex items-center gap-4 mb-4">
                   <button
                     onClick={() => setIsWateringOn(false)}
-                    className={`px-8 py-3 rounded-[10px] transition-all font-semibold ${
-                      !isWateringOn
+                    className={`px-8 py-3 rounded-[10px] transition-all font-semibold ${!isWateringOn
                         ? "bg-[#9e1c60] text-white shadow-md"
                         : "bg-white text-[#9e1c60] border-2 border-[#9e1c60] hover:bg-[#faf5f8]"
-                    }`}
+                      }`}
                     style={{ fontSize: '14px', fontFamily: 'Arial, Helvetica, sans-serif' }}
                   >
                     Matikan
                   </button>
                   <button
                     onClick={() => setIsWateringOn(true)}
-                    className={`px-8 py-3 rounded-[10px] transition-all font-semibold ${
-                      isWateringOn
+                    className={`px-8 py-3 rounded-[10px] transition-all font-semibold ${isWateringOn
                         ? "bg-[#9e1c60] text-white shadow-md"
                         : "bg-white text-[#9e1c60] border-2 border-[#9e1c60] hover:bg-[#faf5f8]"
-                    }`}
+                      }`}
                     style={{ fontSize: '14px', fontFamily: 'Arial, Helvetica, sans-serif' }}
                   >
                     Nyalakan
@@ -767,9 +799,9 @@ export default function BerandaPage() {
                     width={80}
                     height={80}
                     className="object-contain"
-                    style={{ 
-                      filter: isWateringOn 
-                        ? 'brightness(0) saturate(100%) invert(40%) sepia(95%) saturate(2000%) hue-rotate(90deg) brightness(0.9) contrast(1.2)' 
+                    style={{
+                      filter: isWateringOn
+                        ? 'brightness(0) saturate(100%) invert(40%) sepia(95%) saturate(2000%) hue-rotate(90deg) brightness(0.9) contrast(1.2)'
                         : 'brightness(0) saturate(100%) invert(20%) sepia(95%) saturate(5000%) hue-rotate(0deg) brightness(0.8) contrast(1.2)'
                     }}
                     unoptimized
@@ -788,19 +820,19 @@ export default function BerandaPage() {
               <div className="flex justify-between items-center py-2 border-b border-gray-200">
                 <span className="text-gray-600" style={{ fontSize: '13px', fontFamily: 'Arial, Helvetica, sans-serif' }}>Total Produk</span>
                 <span className="font-bold text-black" style={{ fontSize: '16px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
-                  3
+                  {productStats.total}
                 </span>
               </div>
               <div className="flex justify-between items-center py-2 border-b border-gray-200">
                 <span className="text-gray-600" style={{ fontSize: '13px', fontFamily: 'Arial, Helvetica, sans-serif' }}>Tersedia</span>
                 <span className="font-bold" style={{ fontSize: '16px', fontFamily: 'Arial, Helvetica, sans-serif', color: '#106113' }}>
-                  1
+                  {productStats.tersedia}
                 </span>
               </div>
               <div className="flex justify-between items-center py-2">
                 <span className="text-gray-600" style={{ fontSize: '13px', fontFamily: 'Arial, Helvetica, sans-serif' }}>Habis</span>
                 <span className="font-bold" style={{ fontSize: '16px', fontFamily: 'Arial, Helvetica, sans-serif', color: '#dc2626' }}>
-                  1
+                  {productStats.habis}
                 </span>
               </div>
             </div>
