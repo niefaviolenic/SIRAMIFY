@@ -159,8 +159,53 @@ export default function ProductDetailPage() {
 
   const handleBuyNow = async () => {
     if (await checkAuth()) {
-      // Logic for buy now
-      console.log("Buy now");
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user || !product) return;
+
+        // Check if item exists in cart
+        const { data: existingItem, error: fetchError } = await supabase
+          .from('keranjang')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('produk_id', product.id)
+          .single();
+
+        if (fetchError && fetchError.code !== 'PGRST116') {
+          throw fetchError;
+        }
+
+        if (existingItem) {
+          // Update quantity
+          const newQuantity = existingItem.quantity + quantity;
+          const finalQuantity = newQuantity > product.stok ? product.stok : newQuantity;
+
+          const { error: updateError } = await supabase
+            .from('keranjang')
+            .update({ quantity: finalQuantity, updated_at: new Date() })
+            .eq('id', existingItem.id);
+
+          if (updateError) throw updateError;
+        } else {
+          // Insert new item
+          const { error: insertError } = await supabase
+            .from('keranjang')
+            .insert({
+              user_id: user.id,
+              produk_id: product.id,
+              quantity: quantity
+            });
+
+          if (insertError) throw insertError;
+        }
+
+        // Redirect to cart with selected item
+        router.push(`/keranjang?selected=${product.id}`);
+
+      } catch (error: any) {
+        console.error("Error processing buy now:", error);
+        setToast({ message: "Gagal memproses pembelian: " + error.message, type: "error" });
+      }
     }
   };
 
@@ -308,23 +353,34 @@ export default function ProductDetailPage() {
 
             {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 w-full mb-8">
-              <button
-                onClick={handleAddToCart}
-                className="flex-1 border border-[#9e1c60] text-[#9e1c60] hover:bg-[#9e1c60]/5 font-bold py-3 px-6 rounded-full transition flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M9 20C9.55228 20 10 19.5523 10 19C10 18.4477 9.55228 18 9 18C8.44772 18 8 18.4477 8 19C8 19.5523 8.44772 20 9 20Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M20 20C20.5523 20 21 19.5523 21 19C21 18.4477 20.5523 18 20 18C19.4477 18 19 18.4477 19 19C19 19.5523 19.4477 20 20 20Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M1 1H5L7.68 14.39C7.77144 14.8504 8.02191 15.264 8.38755 15.5583C8.75318 15.8526 9.2107 16.009 9.68 16H19.4C19.8693 16.009 20.3268 15.8526 20.6925 15.5583C21.0581 15.264 21.3086 14.8504 21.4 14.39L23 6H6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                Masukkan Keranjang
-              </button>
-              <button
-                onClick={handleBuyNow}
-                className="flex-1 bg-[#9e1c60] hover:bg-[#811844] text-white font-bold py-3 px-6 rounded-full transition shadow-lg hover:shadow-xl cursor-pointer"
-              >
-                Beli Sekarang
-              </button>
+              {product.stok > 0 ? (
+                <>
+                  <button
+                    onClick={handleAddToCart}
+                    className="flex-1 border border-[#9e1c60] text-[#9e1c60] hover:bg-[#9e1c60]/5 font-bold py-3 px-6 rounded-full transition flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M9 20C9.55228 20 10 19.5523 10 19C10 18.4477 9.55228 18 9 18C8.44772 18 8 18.4477 8 19C8 19.5523 8.44772 20 9 20Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M20 20C20.5523 20 21 19.5523 21 19C21 18.4477 20.5523 18 20 18C19.4477 18 19 18.4477 19 19C19 19.5523 19.4477 20 20 20Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M1 1H5L7.68 14.39C7.77144 14.8504 8.02191 15.264 8.38755 15.5583C8.75318 15.8526 9.2107 16.009 9.68 16H19.4C19.8693 16.009 20.3268 15.8526 20.6925 15.5583C21.0581 15.264 21.3086 14.8504 21.4 14.39L23 6H6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    Masukkan Keranjang
+                  </button>
+                  <button
+                    onClick={handleBuyNow}
+                    className="flex-1 bg-[#9e1c60] hover:bg-[#811844] text-white font-bold py-3 px-6 rounded-full transition shadow-lg hover:shadow-xl cursor-pointer"
+                  >
+                    Beli Sekarang
+                  </button>
+                </>
+              ) : (
+                <button
+                  disabled
+                  className="w-full bg-gray-300 text-gray-500 font-bold py-3 px-6 rounded-full cursor-not-allowed"
+                >
+                  Stok Habis
+                </button>
+              )}
             </div>
           </div>
         </div>

@@ -3,20 +3,31 @@
 import { useState, useEffect } from "react";
 import AdminHeader from "@/app/components/AdminHeader";
 import { supabase } from "@/utils/supabaseClient";
-import { SkeletonTable } from "@/app/components/SkeletonAdmin";
+
+interface TransactionItem {
+  id: string;
+  quantity: number;
+  price: number;
+  produk: {
+    nama: string;
+  };
+  petani: {
+    full_name: string;
+    email: string;
+  };
+}
 
 interface Transaction {
   id: string;
-  pembeli_id: string;
-  pembeli_name?: string;
-  petani_id: string;
-  petani_name?: string;
-  product_id: string;
-  product_name?: string;
-  quantity: number;
-  total: number;
+  user_id: string;
+  total_amount: number;
   status: "pending" | "selesai" | "dibatalkan";
   created_at: string;
+  pembeli: {
+    full_name: string;
+    email: string;
+  };
+  items: TransactionItem[];
 }
 
 export default function ManajemenTransaksiPage() {
@@ -42,153 +53,34 @@ export default function ManajemenTransaksiPage() {
         .from("transactions")
         .select(`
           *,
-          pembeli:users!transactions_pembeli_id_fkey(full_name, email),
-          petani:users!transactions_petani_id_fkey(full_name, email),
-          product:products(name)
+          pembeli:users!transactions_user_id_fkey(full_name, email),
+          items:transaction_items(
+            id,
+            quantity,
+            price,
+            produk:produk_id(nama),
+            petani:users!transaction_items_petani_id_fkey(full_name, email)
+          )
         `)
         .order("created_at", { ascending: false });
 
-      if (error) {
-        // Check if error is because table doesn't exist or empty error
-        const errorMessage = error.message || '';
-        const errorCode = error.code || '';
-        const errorKeys = Object.keys(error).length;
-        const errorString = JSON.stringify(error);
-
-        // Check if error is empty or table not found
-        const isEmptyError = errorKeys === 0 || errorString === '{}' || (!errorMessage && !errorCode);
-        const isTableNotFound = errorCode === 'PGRST116' ||
-          errorMessage?.includes('does not exist') ||
-          errorMessage?.includes('relation') ||
-          errorMessage?.includes('not found') ||
-          isEmptyError;
-
-        if (isTableNotFound) {
-          // Table doesn't exist yet, use mock data silently
-          setTransactions([
-            {
-              id: "1",
-              pembeli_id: "p1",
-              pembeli_name: "Pembeli Satu",
-              petani_id: "pt1",
-              petani_name: "Petani Satu",
-              product_id: "pr1",
-              product_name: "Benih Selada Merah",
-              quantity: 2,
-              total: 14000,
-              status: "selesai",
-              created_at: "2025-01-20T10:00:00Z",
-            },
-            {
-              id: "2",
-              pembeli_id: "p2",
-              pembeli_name: "Pembeli Dua",
-              petani_id: "pt1",
-              petani_name: "Petani Satu",
-              product_id: "pr2",
-              product_name: "Selada Oakloaf Merah",
-              quantity: 1,
-              total: 32000,
-              status: "pending",
-              created_at: "2025-01-21T09:00:00Z",
-            },
-            {
-              id: "3",
-              pembeli_id: "p1",
-              pembeli_name: "Pembeli Satu",
-              petani_id: "pt2",
-              petani_name: "Petani Dua",
-              product_id: "pr3",
-              product_name: "Pupuk Organik",
-              quantity: 3,
-              total: 291000,
-              status: "dibatalkan",
-              created_at: "2025-01-19T14:00:00Z",
-            },
-          ]);
-          setIsLoading(false);
-          return;
-        }
-        throw error;
-      }
+      if (error) throw error;
 
       if (data) {
-        const mappedTransactions = data.map((tx: any) => ({
-          id: tx.id,
-          pembeli_id: tx.pembeli_id,
-          pembeli_name: tx.pembeli?.full_name || tx.pembeli?.email || "Unknown",
-          petani_id: tx.petani_id,
-          petani_name: tx.petani?.full_name || tx.petani?.email || "Unknown",
-          product_id: tx.product_id,
-          product_name: tx.product?.name || "Unknown Product",
-          quantity: tx.quantity || 1,
-          total: tx.total || 0,
-          status: tx.status || "pending",
-          created_at: tx.created_at || new Date().toISOString(),
+        // Map data to ensure correct types
+        const mappedData = data.map((tx: any) => ({
+          ...tx,
+          pembeli: Array.isArray(tx.pembeli) ? tx.pembeli[0] : tx.pembeli,
+          items: tx.items.map((item: any) => ({
+            ...item,
+            produk: Array.isArray(item.produk) ? item.produk[0] : item.produk,
+            petani: Array.isArray(item.petani) ? item.petani[0] : item.petani,
+          }))
         }));
-        setTransactions(mappedTransactions);
+        setTransactions(mappedData);
       }
-    } catch (error: any) {
-      // Check if error is because table doesn't exist or empty error object
-      const errorMessage = error?.message || '';
-      const errorCode = error?.code || '';
-      const errorKeys = error ? Object.keys(error).length : 0;
-      const errorString = JSON.stringify(error || {});
-
-      // Check if error is empty or table not found
-      const isEmptyError = errorKeys === 0 || errorString === '{}' || (!errorMessage && !errorCode);
-      const isTableNotFound = errorCode === 'PGRST116' ||
-        errorMessage?.includes('does not exist') ||
-        errorMessage?.includes('relation') ||
-        errorMessage?.includes('not found') ||
-        isEmptyError;
-
-      // Only log error if it's a real error with meaningful message
-      if (!isTableNotFound && errorMessage && errorKeys > 0) {
-        // console.error("Error loading transactions:", error); // Suppress error since table doesn't exist
-      }
-      // Mock data
-      setTransactions([
-        {
-          id: "1",
-          pembeli_id: "p1",
-          pembeli_name: "Pembeli Satu",
-          petani_id: "pt1",
-          petani_name: "Petani Satu",
-          product_id: "pr1",
-          product_name: "Benih Selada Merah",
-          quantity: 2,
-          total: 14000,
-          status: "selesai",
-          created_at: "2025-01-20T10:00:00Z",
-        },
-        {
-          id: "2",
-          pembeli_id: "p2",
-          pembeli_name: "Pembeli Dua",
-          petani_id: "pt1",
-          petani_name: "Petani Satu",
-          product_id: "pr2",
-          product_name: "Selada Oakloaf Merah",
-          quantity: 1,
-          total: 32000,
-          status: "pending",
-          created_at: "2025-01-21T09:00:00Z",
-        },
-        {
-          id: "3",
-          pembeli_id: "p1",
-          pembeli_name: "Pembeli Satu",
-          petani_id: "pt2",
-          petani_name: "Petani Dua",
-          product_id: "pr3",
-          product_name: "Pupuk Organik",
-          quantity: 3,
-          total: 291000,
-          status: "dibatalkan",
-          created_at: "2025-01-19T14:00:00Z",
-        },
-      ]);
+    } catch (error) {
+      console.error("Error loading transactions:", error);
     } finally {
       setIsLoading(false);
     }
@@ -208,9 +100,10 @@ export default function ManajemenTransaksiPage() {
       filtered = filtered.filter(
         tx =>
           tx.id.toLowerCase().includes(query) ||
-          (tx.pembeli_name && tx.pembeli_name.toLowerCase().includes(query)) ||
-          (tx.petani_name && tx.petani_name.toLowerCase().includes(query)) ||
-          (tx.product_name && tx.product_name.toLowerCase().includes(query))
+          (tx.pembeli?.full_name && tx.pembeli.full_name.toLowerCase().includes(query)) ||
+          (tx.pembeli?.email && tx.pembeli.email.toLowerCase().includes(query)) ||
+          tx.items.some(item => item.produk?.nama.toLowerCase().includes(query)) ||
+          tx.items.some(item => item.petani?.full_name.toLowerCase().includes(query))
       );
     }
 
@@ -315,36 +208,11 @@ export default function ManajemenTransaksiPage() {
         {/* Table */}
         {isLoading ? (
           <div className="space-y-6">
-            {/* Header Skeleton */}
-            <div className="flex justify-between items-start">
-              <div className="space-y-2">
-                <div className="h-8 w-48 bg-gray-200 rounded animate-pulse"></div>
-                <div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>
-              </div>
-              <div className="h-10 w-10 bg-gray-200 rounded-full animate-pulse"></div>
-            </div>
-
-            {/* Filters Skeleton */}
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="flex-1 h-10 bg-gray-200 rounded-lg animate-pulse"></div>
-              <div className="w-full md:w-48 h-10 bg-gray-200 rounded-lg animate-pulse"></div>
-            </div>
-
-            {/* Table Skeleton */}
-            <div className="border border-gray-200 rounded-[10px] overflow-hidden">
-              <div className="bg-gray-100 h-10 w-full animate-pulse"></div>
-              <div className="p-4 space-y-4">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} className="flex gap-4">
-                    <div className="h-4 w-1/6 bg-gray-200 rounded animate-pulse"></div>
-                    <div className="h-4 w-1/6 bg-gray-200 rounded animate-pulse"></div>
-                    <div className="h-4 w-1/6 bg-gray-200 rounded animate-pulse"></div>
-                    <div className="h-4 w-1/6 bg-gray-200 rounded animate-pulse"></div>
-                    <div className="h-4 w-1/6 bg-gray-200 rounded animate-pulse"></div>
-                    <div className="h-4 w-1/6 bg-gray-200 rounded animate-pulse"></div>
-                  </div>
-                ))}
-              </div>
+            <div className="bg-gray-100 h-10 w-full animate-pulse rounded"></div>
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-16 w-full bg-gray-200 rounded animate-pulse"></div>
+              ))}
             </div>
           </div>
         ) : (
@@ -355,25 +223,17 @@ export default function ManajemenTransaksiPage() {
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-bold">ID Transaksi</th>
                     <th className="px-4 py-3 text-left text-xs font-bold">Pembeli</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold">Petani</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold">Produk</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold">Jumlah</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold">Total</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold">Total Item</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold">Total Harga</th>
                     <th className="px-4 py-3 text-left text-xs font-bold">Status</th>
                     <th className="px-4 py-3 text-left text-xs font-bold">Tanggal</th>
                     <th className="px-4 py-3 text-center text-xs font-bold">Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {isLoading ? (
+                  {filteredTransactions.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="px-4 py-8 text-center text-sm text-gray-500">
-                        Memuat data...
-                      </td>
-                    </tr>
-                  ) : filteredTransactions.length === 0 ? (
-                    <tr>
-                      <td colSpan={9} className="px-4 py-8 text-center text-sm text-gray-500">
+                      <td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-500">
                         Tidak ada transaksi ditemukan
                       </td>
                     </tr>
@@ -381,11 +241,14 @@ export default function ManajemenTransaksiPage() {
                     filteredTransactions.map((transaction) => (
                       <tr key={transaction.id} className="border-t border-gray-200 hover:bg-gray-50">
                         <td className="px-4 py-3 text-sm text-black">#{transaction.id.slice(0, 8)}</td>
-                        <td className="px-4 py-3 text-sm text-black">{transaction.pembeli_name}</td>
-                        <td className="px-4 py-3 text-sm text-black">{transaction.petani_name}</td>
-                        <td className="px-4 py-3 text-sm text-black">{transaction.product_name}</td>
-                        <td className="px-4 py-3 text-sm text-black">{transaction.quantity}</td>
-                        <td className="px-4 py-3 text-sm text-black">{formatCurrency(transaction.total)}</td>
+                        <td className="px-4 py-3 text-sm text-black">
+                          <div className="font-bold">{transaction.pembeli?.full_name || "Unknown"}</div>
+                          <div className="text-xs text-gray-500">{transaction.pembeli?.email}</div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-black">
+                          {transaction.items.reduce((acc, item) => acc + item.quantity, 0)} item
+                        </td>
+                        <td className="px-4 py-3 text-sm text-black">{formatCurrency(transaction.total_amount)}</td>
                         <td className="px-4 py-3">
                           <select
                             value={transaction.status}
@@ -424,48 +287,69 @@ export default function ManajemenTransaksiPage() {
       {
         showDetailModal && selectedTransaction && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-              <h3 className="font-bold text-lg text-black mb-4">Detail Transaksi</h3>
-              <div className="space-y-3">
+            <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="font-bold text-lg text-black">Detail Transaksi</h3>
+                <button
+                  onClick={() => setShowDetailModal(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <div>
-                  <p className="text-xs text-gray-500">ID Transaksi</p>
-                  <p className="text-sm font-bold text-black">#{selectedTransaction.id}</p>
+                  <h4 className="font-bold text-sm text-gray-500 mb-2">Informasi Transaksi</h4>
+                  <div className="space-y-2">
+                    <p className="text-sm"><span className="font-medium">ID:</span> #{selectedTransaction.id}</p>
+                    <p className="text-sm"><span className="font-medium">Tanggal:</span> {formatDate(selectedTransaction.created_at)}</p>
+                    <p className="text-sm"><span className="font-medium">Status:</span> <span className="capitalize" style={{ color: getStatusColor(selectedTransaction.status) }}>{selectedTransaction.status}</span></p>
+                    <p className="text-sm"><span className="font-medium">Total:</span> {formatCurrency(selectedTransaction.total_amount)}</p>
+                  </div>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">Pembeli</p>
-                  <p className="text-sm font-bold text-black">{selectedTransaction.pembeli_name}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">Petani</p>
-                  <p className="text-sm font-bold text-black">{selectedTransaction.petani_name}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">Produk</p>
-                  <p className="text-sm font-bold text-black">{selectedTransaction.product_name}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">Jumlah</p>
-                  <p className="text-sm font-bold text-black">{selectedTransaction.quantity}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">Total</p>
-                  <p className="text-sm font-bold text-black">{formatCurrency(selectedTransaction.total)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">Status</p>
-                  <p className="text-sm font-bold text-black capitalize">{selectedTransaction.status}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">Tanggal</p>
-                  <p className="text-sm font-bold text-black">{formatDate(selectedTransaction.created_at)}</p>
+                  <h4 className="font-bold text-sm text-gray-500 mb-2">Informasi Pembeli</h4>
+                  <div className="space-y-2">
+                    <p className="text-sm"><span className="font-medium">Nama:</span> {selectedTransaction.pembeli?.full_name || "Unknown"}</p>
+                    <p className="text-sm"><span className="font-medium">Email:</span> {selectedTransaction.pembeli?.email || "-"}</p>
+                  </div>
                 </div>
               </div>
+
+              <div>
+                <h4 className="font-bold text-sm text-gray-500 mb-3">Daftar Produk</h4>
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left">Produk</th>
+                        <th className="px-4 py-2 text-left">Petani</th>
+                        <th className="px-4 py-2 text-center">Qty</th>
+                        <th className="px-4 py-2 text-right">Harga</th>
+                        <th className="px-4 py-2 text-right">Subtotal</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {selectedTransaction.items.map((item) => (
+                        <tr key={item.id}>
+                          <td className="px-4 py-2">{item.produk?.nama || "Unknown Product"}</td>
+                          <td className="px-4 py-2">{item.petani?.full_name || "Unknown"}</td>
+                          <td className="px-4 py-2 text-center">{item.quantity}</td>
+                          <td className="px-4 py-2 text-right">{formatCurrency(item.price)}</td>
+                          <td className="px-4 py-2 text-right">{formatCurrency(item.price * item.quantity)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
               <div className="flex justify-end mt-6">
                 <button
-                  onClick={() => {
-                    setShowDetailModal(false);
-                    setSelectedTransaction(null);
-                  }}
+                  onClick={() => setShowDetailModal(false)}
                   className="px-4 py-2 bg-[#9e1c60] rounded-lg text-sm font-bold text-white hover:bg-[#7a1548] cursor-pointer"
                 >
                   Tutup
@@ -478,4 +362,3 @@ export default function ManajemenTransaksiPage() {
     </div >
   );
 }
-
