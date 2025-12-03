@@ -19,6 +19,7 @@ interface Product {
   namaProduk: string;
   harga: string;
   stok: string;
+  jumlah_terjual: number;
   status: "Tersedia" | "Stok Menipis" | "Habis";
 }
 
@@ -86,6 +87,7 @@ export default function ProdukPage() {
           namaProduk: item.nama,
           harga: hargaFormatted,
           stok: `${stock}/${maxStock.toLocaleString("id-ID")}`,
+          jumlah_terjual: item.jumlah_terjual || 0,
           status: status,
         };
       });
@@ -198,7 +200,7 @@ export default function ProdukPage() {
                 Total Penjualan
               </p>
               <p className="font-bold text-black" style={{ fontSize: '24px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
-                24
+                {products.reduce((acc, curr) => acc + (curr.jumlah_terjual || 0), 0)}
               </p>
             </div>
             <div className="rounded-[15px] p-4 shadow-lg hover:shadow-xl transition-all duration-300" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)' }}>

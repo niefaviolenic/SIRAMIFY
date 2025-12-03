@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { supabase } from "@/utils/supabaseClient";
@@ -30,6 +30,7 @@ export default function KeranjangPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     fetchCartItems();
@@ -64,11 +65,13 @@ export default function KeranjangPage() {
       if (error) throw error;
 
       if (data) {
+        const selectedParam = searchParams.get('selected');
+
         // Transform data and add selected property
         const formattedItems = data.map((item: any) => ({
           id: item.id,
           quantity: item.quantity,
-          selected: true, // Default selected
+          selected: selectedParam ? item.produk.id === selectedParam : true, // Select specific if param exists, else all
           produk: item.produk
         }));
         setCartItems(formattedItems);
@@ -328,6 +331,10 @@ export default function KeranjangPage() {
               </div>
 
               <button
+                onClick={() => {
+                  const selectedIds = cartItems.filter(item => item.selected).map(item => item.id);
+                  router.push(`/pembayaran?ids=${selectedIds.join(',')}`);
+                }}
                 className="w-full py-4 bg-[#9e1c60] text-white rounded-xl font-bold text-base hover:bg-[#811844] active:scale-[0.98] transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                 disabled={totalItems === 0}
               >

@@ -275,40 +275,13 @@ export default function PesananPage() {
           <div className="mb-8">
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
-                <h1 className="font-bold text-3xl text-black">Produk</h1>
-                <p className="text-sm text-black mt-1">Produk/Pesanan</p>
+                <h1 className="font-bold text-3xl text-black">Pesanan Masuk</h1>
+                <p className="text-sm text-black mt-1">Kelola pesanan produk Anda</p>
               </div>
               <div className="flex-shrink-0">
                 <PetaniHeader />
               </div>
             </div>
-          </div>
-
-          {/* Navigation Button */}
-          <div className="mb-4">
-            <button
-              onClick={() => router.push("/petani/produk")}
-              className="px-4 py-2 bg-[#9e1c60] text-white rounded-[10px] hover:bg-[#7d1650] hover:shadow-md transition-all duration-200 flex items-center gap-2"
-              style={{ fontSize: '14px', fontFamily: 'Arial, Helvetica, sans-serif' }}
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 16 16"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-                style={{ strokeWidth: '1.5' }}
-              >
-                <path
-                  d="M10 12L6 8L10 4"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              Kembali ke Produk
-            </button>
           </div>
 
           {/* Card Statistik Pesanan */}
@@ -396,13 +369,13 @@ export default function PesananPage() {
                 <tbody style={{ background: 'linear-gradient(to bottom, #ffffff 0%, #faf8fb 100%)' }}>
                   {isLoading ? (
                     <tr>
-                      <td colSpan={8} className="px-4 py-8 text-center text-gray-500" style={{ fontSize: '12px' }}>
+                      <td colSpan={9} className="px-4 py-8 text-center text-gray-500" style={{ fontSize: '12px' }}>
                         Memuat data...
                       </td>
                     </tr>
                   ) : orders.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-4 py-8 text-center text-gray-500" style={{ fontSize: '12px' }}>
+                      <td colSpan={9} className="px-4 py-8 text-center text-gray-500" style={{ fontSize: '12px' }}>
                         Tidak ada data
                       </td>
                     </tr>
@@ -835,62 +808,6 @@ export default function PesananPage() {
           </div>
         </div>
       )}
-
-      {/* Modal Hapus Pesanan */}
-      {showDeleteModal && selectedOrder && (
-        <div
-          className="fixed inset-0 flex items-center justify-center z-50 py-8"
-          onClick={() => setShowDeleteModal(false)}
-          style={{
-            animation: 'fadeIn 0.2s ease-in-out',
-            fontFamily: 'Arial, Helvetica, sans-serif',
-            backgroundColor: 'rgba(255, 255, 255, 0.5)'
-          }}
-        >
-          <div
-            className="rounded-[15px] p-8 max-w-sm w-full mx-4 relative shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: 'linear-gradient(135deg, #ffffff 0%, #faf5f8 40%, #f5e8f0 80%, #f0d9e8 100%)', border: '1px solid rgba(158, 28, 96, 0.25)',
-              animation: 'slideUp 0.3s ease-out',
-              fontFamily: 'Arial, Helvetica, sans-serif'
-            }}
-          >
-            {/* Icon */}
-            <div className="flex justify-center mb-6">
-              <div className="w-20 h-20 rounded-full border-4 border-[#9e1c60] flex items-center justify-center bg-white">
-                <span className="text-4xl text-[#9e1c60] font-bold leading-none">!</span>
-              </div>
-            </div>
-
-            {/* Message */}
-            <div className="text-center mb-8">
-              <p className="text-[#181818] text-lg font-normal leading-relaxed">
-                Anda yakin ingin menghapus pesanan dari {selectedOrder.namaPembeli}?
-              </p>
-            </div>
-
-            {/* Buttons */}
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowDeleteModal(false)}
-                className="flex-1 py-3 rounded-[10px] bg-[#ff9500] text-white hover:bg-[#e68500] transition font-semibold"
-                style={{ fontSize: '16px' }}
-              >
-                Batal
-              </button>
-              <button
-                onClick={handleDeleteOrder}
-                className="flex-1 py-3 rounded-[10px] bg-[#dc2626] text-white hover:bg-[#b91c1c] transition font-semibold"
-                style={{ fontSize: '16px' }}
-              >
-                Hapus
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
-
